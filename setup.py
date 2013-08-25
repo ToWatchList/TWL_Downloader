@@ -106,4 +106,4 @@ with open(savepath, 'wb') as configfile:
 
 print ''
 print "Thanks for setting up TWL_Downloader for ToWatchList!\nYour settings have been saved under '%s'.\nIf you need to change any values may edit them there or run this setup program again.\n" % savepath
-print "Finally, please be aware that TWL_Downloader uses an officially unsupported API which may change anytime.\nSee https://github.com/nickv2002/TWL_Downloader and http://towatchlist.com/api for details."
+print "Finally, please be aware that TWL_Downloader uses an officially unsupported API which may change anytime.\nSee https://github.com/ToWatchList/TWL_Downloader and http://towatchlist.com/api for details."
