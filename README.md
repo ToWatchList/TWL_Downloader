@@ -1,17 +1,17 @@
-TWL_Downloader
-==============
+ToWatchList Downloader
+======================
 
-A Python script to automate downloading videos from ToWatchList.com
+ToWatchList Downloader or `twl_downloader.py` is Python script to automate downloading videos from ToWatchList.com
 
 Requirements
 ------------
-- Python 2.7 or later. - The scripts have been tested on Python 2.7.3 on Linux, and 2.7.5 on Mac.
+- Python 2.7 or later - The scripts have been tested on Python 2.7.3 on Linux, and 2.7.5 on Mac.
 - [youtube-dl](http://rg3.github.io/youtube-dl/) - Must be the latest version
 
 Getting Started
 ---------------
 
-To start run the `setup.py` script.  It will walk though saving your API key and other options.
+After installing [youtube-dl](http://rg3.github.io/youtube-dl/), run the `setup.py` script.  It will walk though saving your API key and other options.
 
 Once you're happy with the setup options. Try running `twl_downloader.py` to make sure it works. It should download any videos that were added to your ToWatchList in the last 24 hours.
 
@@ -23,7 +23,7 @@ It's important to keep [youtube-dl](http://rg3.github.io/youtube-dl/) updated re
 
 On a related note, it's really neat to point a TV interface like [XBMC](http://xbmc.org) or the like at your download folder and then be able to browse & watch all your to watch videos locally.  That's the original intent of writing this script.
 
-Disclaimers and Other Info
+Disclaimers & Other Info
 --------------------------
 
 These scripts use some of the private APIs from ToWatchList, which may change at any time.  In fact, they probably will change in the future a few ways:
