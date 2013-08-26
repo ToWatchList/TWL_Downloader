@@ -21,7 +21,7 @@ Tips & Suggestions
 ------------------
 It's important to keep [youtube-dl](http://rg3.github.io/youtube-dl/) updated regularly because it can break if things are changed too frequently.  In my experience this hasn't been a frequent problem but when it occurred [youtube-dl](http://rg3.github.io/youtube-dl/) was updated rapidly to fix any issues.  So I suggest using [pip](http://www.pip-installer.org/) or [HomeBrew](http://brew.sh) (on the Mac) to install and update [youtube-dl](http://rg3.github.io/youtube-dl/) regularly and easily.  You might even put the updates command on a cron job of it's own.
 
-On
+On a related note, it's really neat to point a TV interface like [XBMC](http://xbmc.org) or the like at your download folder and then be able to browse & watch all your to watch videos locally.  That's the original intent of writing this script.
 
 Disclaimers and Other Info
 --------------------------
