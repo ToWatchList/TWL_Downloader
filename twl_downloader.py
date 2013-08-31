@@ -25,6 +25,9 @@ if downloadLocation != 'False':
     # change directory to download location if it was set
     os.chdir(downloadLocation)
 
+print "Syncing ToWatchList with '%s'" % os.getcwd()
+print "---------------------------------"
+
 for i in xrange(len(myMarks)):
     # skip if it's been marked as watched
     if myMarks[i]['Mark']['watched']:
