@@ -13,7 +13,7 @@ Getting Started
 
 After installing [youtube-dl](http://rg3.github.io/youtube-dl/), run the `setup.py` script.  It will walk though saving your API key and other options.
 
-Once you're happy with the setup options. Try running `twl_downloader.py` to make sure it works. It should download any videos that were added to your ToWatchList in the last 24 hours.
+Once you're happy with the setup options. Try running `twl_downloader.py` to make sure it works. It should download any videos that were added to your ToWatchList in the last 48 hours.
 
 It's recommended you set up a cron job (or similar tool) to start `twl_downloader.py` regularly.  This keeps your local videos up to date with your ToWatchList since the script will also delete local videos you've marked as watched.
 
