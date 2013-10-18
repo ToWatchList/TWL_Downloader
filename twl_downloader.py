@@ -3,16 +3,34 @@
 # youtube-dl is available here: http://rg3.github.io/youtube-dl/
 
 import urllib2, base64, simplejson, subprocess, os, glob, ConfigParser, sys
+from datetime import datetime
 
 savepath = os.path.expanduser('~/.twl_downloader_settings.cfg')
 config = ConfigParser.RawConfigParser()
 config.read(savepath)
 
 apiKey = config.get('twl_downloader_settings', 'apiKey')
-pathToYouTubeDL = config.get('twl_downloader_settings', 'pathToYouTubeDL')
-downloadLocation = config.get('twl_downloader_settings', 'downloadLocation')
+pathToYouTubeDL   = config.get('twl_downloader_settings', 'pathToYouTubeDL')
+downloadLocation  = config.get('twl_downloader_settings', 'downloadLocation')
+refreshTime       = config.get('twl_downloader_settings', 'refreshTime')
+refreshTime       = datetime.strptime(refreshTime, '%Y-%m-%d %H:%M:%S.%f')
+refreshTimeString = datetime.strftime(refreshTime, '%Y-%m-%dT%H:%M:%SUTC')
+# We want something like: 2013-07-07T00:40:37UTC
 
-TWL_API_URL = "https://towatchlist.com/marks/data.json?since=-48hours&uid=%s" % apiKey
+# Set up a new config file
+config = ConfigParser.RawConfigParser()
+config.add_section('twl_downloader_settings')
+config.set('twl_downloader_settings', 'apiKey',           apiKey)
+config.set('twl_downloader_settings', 'pathToYouTubeDL',  pathToYouTubeDL)
+config.set('twl_downloader_settings', 'downloadLocation', downloadLocation)
+config.set('twl_downloader_settings', 'refreshTime',      datetime.utcnow())
+
+# Writing our config file
+with open(savepath, 'wb') as configfile:
+    config.write(configfile)
+
+# create our request url
+TWL_API_URL = "https://towatchlist.com/marks/data.json?since=%s&uid=%s" % (refreshTimeString, apiKey)
 
 # create the API request
 request = urllib2.Request(TWL_API_URL)

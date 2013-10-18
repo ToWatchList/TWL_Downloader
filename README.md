@@ -1,6 +1,5 @@
 ToWatchList Downloader
 ======================
-
 ToWatchList Downloader or `twl_downloader.py` is Python script to automate downloading videos from ToWatchList.com
 
 Requirements
@@ -10,12 +9,11 @@ Requirements
 
 Getting Started
 ---------------
-
 After installing [youtube-dl](http://rg3.github.io/youtube-dl/), run the `setup.py` script.  It will walk though saving your API key and other options.
 
-Once you're happy with the setup options. Try running `twl_downloader.py` to make sure it works. It should download any videos that were added to your ToWatchList in the last 48 hours.
+Once you're happy with the setup options. Try running `twl_downloader.py` to make sure it works. It should download any videos that were added to your ToWatchList in the last 48 hours the first time it is run (after that it only downloads changes since the last execution time).
 
-It's recommended you set up a cron job (or similar tool) to start `twl_downloader.py` regularly.  This keeps your local videos up to date with your ToWatchList since the script will also delete local videos you've marked as watched.
+It's recommended you set up a cron job (or similar tool) to start `twl_downloader.py` regularly.  This keeps your local videos up to date with your ToWatchList since the script will also delete local videos you've marked as watched on the website or app.
 
 Tips & Suggestions
 ------------------
@@ -25,11 +23,12 @@ On a related note, it's really great to point a TV interface like [XBMC](http://
 
 Disclaimers & Other Info
 --------------------------
-
 These scripts use some of the private APIs from ToWatchList, which may change at any time.  In fact, they probably will change in the future a few ways:
 
 1.  Minor adjustments to syntax and data in provided by the API (this shouldn't affect these scripts)
 2.  Bandwidth & polling limits to prevent abuse (this shouldn't affect normal use)
 3.  The full data API may require a small monthly or yearly fee as part of subscription to ToWatchList's 'Pro' features
 
-Please see the [ToWatchList API Page](http://towatchlist.com/api) for more API details.
+That said, I'm the the developer of ToWatchList and use these scipts every day.  So I plan to keep them updated if anything changes that would break them.
+
+Please see the [ToWatchList API Page](http://towatchlist.com/api) for more API details and [contact me](http://towatchlist.com/pages/contact) with any questions.

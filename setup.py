@@ -2,6 +2,7 @@
 # this script helps the user set values for the main script.
 
 import urllib2, base64, simplejson, subprocess, os, glob, sys, getpass, ConfigParser
+from datetime import datetime, timedelta
 
 # 'which' & 'is_exe' code snipet via:
 # http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python/377028#377028
@@ -99,6 +100,8 @@ config.add_section('twl_downloader_settings')
 config.set('twl_downloader_settings', 'apiKey',           apiKey)
 config.set('twl_downloader_settings', 'pathToYouTubeDL',  pathToYouTubeDL)
 config.set('twl_downloader_settings', 'downloadLocation', downloadLocation)
+# date of -48 hours
+config.set('twl_downloader_settings', 'refreshTime',      datetime.utcnow()-timedelta(days=2))
 
 # Writing our config file
 with open(savepath, 'wb') as configfile:
