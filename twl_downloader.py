@@ -12,10 +12,9 @@ config.read(savepath)
 apiKey = config.get('twl_downloader_settings', 'apiKey')
 pathToYouTubeDL   = config.get('twl_downloader_settings', 'pathToYouTubeDL')
 downloadLocation  = config.get('twl_downloader_settings', 'downloadLocation')
-refreshTime       = config.get('twl_downloader_settings', 'refreshTime')
-refreshTime       = datetime.strptime(refreshTime, '%Y-%m-%d %H:%M:%S.%f')
-refreshTimeString = datetime.strftime(refreshTime, '%Y-%m-%dT%H:%M:%SUTC')
-# We want something like: 2013-07-07T00:40:37UTC
+
+# get all the data from the last week:
+refreshTimeString = '-7days' #alternate relative English string will be parsed by PHP on the server side
 
 # Set up a new config file
 config = ConfigParser.RawConfigParser()
@@ -23,17 +22,18 @@ config.add_section('twl_downloader_settings')
 config.set('twl_downloader_settings', 'apiKey',           apiKey)
 config.set('twl_downloader_settings', 'pathToYouTubeDL',  pathToYouTubeDL)
 config.set('twl_downloader_settings', 'downloadLocation', downloadLocation)
-config.set('twl_downloader_settings', 'refreshTime',      datetime.utcnow())
 
 # Writing our config file
 with open(savepath, 'wb') as configfile:
     config.write(configfile)
 
 # create our request url
-TWL_API_URL = "https://towatchlist.com/marks/data.json?since=%s&uid=%s" % (refreshTimeString, apiKey)
+TWL_API_URL = "https://towatchlist.com/api/v1/marks?since=%s&uid=%s" % (refreshTimeString, apiKey)
 
+# create the headers
+headers = {'Accept': 'application/json',}
 # create the API request
-request = urllib2.Request(TWL_API_URL)
+request = urllib2.Request(TWL_API_URL, None, headers)
 # perform the request
 result = urllib2.urlopen(request)
 # array of the results
