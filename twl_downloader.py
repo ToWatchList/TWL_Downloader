@@ -14,7 +14,7 @@ pathToYouTubeDL   = config.get('twl_downloader_settings', 'pathToYouTubeDL')
 downloadLocation  = config.get('twl_downloader_settings', 'downloadLocation')
 
 # get all the data from the last week:
-refreshTimeString = '-7days' #alternate relative English string will be parsed by PHP on the server side
+refreshTimeString = '-10days' #alternate relative English string will be parsed by PHP on the server side
 
 # Set up a new config file
 config = ConfigParser.RawConfigParser()
@@ -64,5 +64,5 @@ for i in xrange(len(myMarks)):
             # if it hasn't been downloaded or marked watched, try to download it now
             videoURL = myMarks[i]['Mark']['source_url']
             print "Downlading '%s'" % videoURL
-            subprocess.call([pathToYouTubeDL,"-c",videoURL])
+            subprocess.call([pathToYouTubeDL,videoURL,'-f','bestvideo+bestaudio'])
     print "---------------------------------"
