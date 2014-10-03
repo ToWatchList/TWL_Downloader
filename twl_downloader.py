@@ -49,12 +49,13 @@ print "---------------------------------"
 for i in xrange(len(myMarks)):
     # skip if it's been marked as watched
     if (myMarks[i]['Mark']['watched']) or (myMarks[i]['Mark']['delflag']):
-        print "Watched/Deleted: '%s'" % myMarks[i]['Mark']['title']
+        # print "Watched/Deleted: '%s'" % myMarks[i]['Mark']['title']
         # it's been marked as watched, delete the local copy
         filesToRemove = glob.glob('*-%s.*' % myMarks[i]['Mark']['video_id'])
         for filename in filesToRemove:
             os.remove(filename)
             print "Removed watched or deleted video: '%s'" % filename
+        continue
     else:
         # if the file already exists:
         existingFiles = glob.glob('*-%s.*' % myMarks[i]['Mark']['video_id'])
@@ -64,5 +65,9 @@ for i in xrange(len(myMarks)):
             # if it hasn't been downloaded or marked watched, try to download it now
             videoURL = myMarks[i]['Mark']['source_url']
             print "Downlading '%s'" % videoURL
-            subprocess.call([pathToYouTubeDL,videoURL,'-f','bestvideo+bestaudio'])
+
+            if "vimeo" in videoURL:
+                subprocess.call([pathToYouTubeDL,videoURL])
+            else:
+                subprocess.call([pathToYouTubeDL,videoURL,'-f','bestvideo+bestaudio'])
     print "---------------------------------"
