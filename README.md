@@ -19,7 +19,7 @@ Tips & Suggestions
 ------------------
 It's important to keep [youtube-dl](http://rg3.github.io/youtube-dl/) updated regularly because it can break if things are changed too frequently.  In my experience this hasn't been a frequent problem but when it occurred [youtube-dl](http://rg3.github.io/youtube-dl/) was updated rapidly to fix any issues.  So I suggest using [pip](http://www.pip-installer.org/) or [HomeBrew](http://brew.sh) (on the Mac) to install and update [youtube-dl](http://rg3.github.io/youtube-dl/) regularly and easily.  You might even put the updates command on a cron job of it's own.
 
-On a related note, it's really great to point a TV interface like [XBMC](http://xbmc.org) at your download folder.  This allows you to browse & watch all your to watch videos locally with no buffering.  This is actually the original intent the script.
+On a related note, it's really great to point a TV interface like [Kodi](http://kodi.tv) (formally XBMC) at your download folder.  This allows you to browse & watch all your to watch videos locally with no buffering.  This is actually the original intent the script.
 
 Disclaimers & Other Info
 --------------------------
@@ -29,6 +29,6 @@ These scripts use some of the private APIs from ToWatchList, which may change at
 2.  Bandwidth & polling limits to prevent abuse (this shouldn't affect normal use)
 3.  The full data API may require a small monthly or yearly fee as part of subscription to ToWatchList's 'Pro' features
 
-That said, I'm the the developer of ToWatchList and use these scipts every day.  So I plan to keep them updated if anything changes that would break them.
+That said, I'm the the developer of ToWatchList and use these scripts every day.  So I plan to keep them updated if anything changes that would break them.
 
 Please see the [ToWatchList API Page](http://towatchlist.com/api) for more API details and [contact me](http://towatchlist.com/pages/contact) with any questions.
