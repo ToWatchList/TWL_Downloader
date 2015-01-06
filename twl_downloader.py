@@ -69,5 +69,9 @@ for i in xrange(len(myMarks)):
             if "vimeo" in videoURL:
                 subprocess.call([pathToYouTubeDL,videoURL])
             else:
-                subprocess.call([pathToYouTubeDL,videoURL,'-f','bestvideo+bestaudio'])
+                #this version of the command usually gets the 720p version of the video
+                subprocess.call([pathToYouTubeDL,videoURL])
+                # this version of the command will get the 1080p or 4K version of the video if available
+                # however, this requires Libav or FFmpeg to mux an audio and video stream together, which I found produced unreliable results; use at your own discretion 
+                #subprocess.call([pathToYouTubeDL,videoURL,'-f','bestvideo+bestaudio'])
     print "---------------------------------"
