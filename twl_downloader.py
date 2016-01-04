@@ -2,7 +2,9 @@
 # this script downloads a users latest ToWatchList unwatched videos using youtube-dl
 # youtube-dl is available here: http://rg3.github.io/youtube-dl/
 
+from __future__ import unicode_literals
 import urllib2, base64, simplejson, subprocess, os, glob, ConfigParser, sys
+# import youtube_dl # TODO: in future do youtube_dl without needing to CLI with subprocess
 from datetime import datetime
 
 savepath = os.path.expanduser('~/.twl_downloader_settings.cfg')
@@ -13,8 +15,8 @@ apiKey = config.get('twl_downloader_settings', 'apiKey')
 pathToYouTubeDL   = config.get('twl_downloader_settings', 'pathToYouTubeDL')
 downloadLocation  = config.get('twl_downloader_settings', 'downloadLocation')
 
-# get all the data from the last week:
-refreshTimeString = '-10days' #alternate relative English string will be parsed by PHP on the server side
+# get all the data from the last few days:
+refreshTimeString = '-28days' #alternate relative English string will be parsed by PHP on the server side
 
 # Set up a new config file
 config = ConfigParser.RawConfigParser()
@@ -66,12 +68,6 @@ for i in xrange(len(myMarks)):
             videoURL = myMarks[i]['Mark']['source_url']
             print "Downlading '%s'" % videoURL
 
-            if "vimeo" in videoURL:
-                subprocess.call([pathToYouTubeDL,videoURL])
-            else:
-                #this version of the command usually gets the 720p version of the video
-                subprocess.call([pathToYouTubeDL,videoURL])
-                # this version of the command will get the 1080p or 4K version of the video if available
-                # however, this requires Libav or FFmpeg to mux an audio and video stream together, which I found produced unreliable results; use at your own discretion 
-                #subprocess.call([pathToYouTubeDL,videoURL,'-f','bestvideo+bestaudio'])
+            subprocess.call([pathToYouTubeDL,videoURL])
+
     print "---------------------------------"
