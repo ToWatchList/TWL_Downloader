@@ -17,7 +17,7 @@ It's recommended you set up a cron job (or similar tool) to start `twl_downloade
 
 Tips & Suggestions
 ------------------
-It's important to keep [youtube-dl](http://rg3.github.io/youtube-dl/) updated regularly because it can break if YouTube or Vimeo change things around.  In my experience this hasn't been a frequent problem but when it occurred [youtube-dl](http://rg3.github.io/youtube-dl/) was updated rapidly to fix any issues.  So I suggest using [pip](http://www.pip-installer.org/) or [HomeBrew](http://brew.sh) (on the Mac) to install and update [youtube-dl](http://rg3.github.io/youtube-dl/) regularly and easily.  You might even put the updates command on a cron job of it's own.
+It's important to keep [youtube-dl](http://rg3.github.io/youtube-dl/) updated regularly because it can break if YouTube or Vimeo change things around.  In my experience this hasn't been a frequent problem but when it occurred [youtube-dl](http://rg3.github.io/youtube-dl/) was updated rapidly to fix any issues.  So I suggest using [HomeBrew](http://brew.sh) (on the Mac) or just [youtube-dl's self updater](https://github.com/rg3/youtube-dl/blob/master/README.md#options) (with the `-U` CLI option) to to keep things up to date.  You might even put the updates command on a cron job of it's own.
 
 On a related note, it's really great to point a TV interface like [Kodi](http://kodi.tv) (formally XBMC) at your download folder.  This allows you to browse & watch all your to watch videos locally with no buffering.  This is actually the original intent the script.
 
