@@ -67,9 +67,12 @@ for i in xrange(len(myMarks)):
             # if it hasn't been downloaded or marked watched, try to download it now
             videoURL = myMarks[i]['Mark']['source_url']
             print "Downlading '%s'" % videoURL
-            
-            # call youtube-dl to download the file, the -f argument limits things to 1080p (ie no 4K video)
-            subprocess.call([pathToYouTubeDL,'-f',"'bestvideo[height<=1080]+bestaudio'",videoURL])
 
+            if myMarks[i]['Mark']['source_site'] == 1: #youtube
+                # call youtube-dl to download the file, the -f argument limits things to 1080p (ie no 4K video)
+                subprocessArgs = [pathToYouTubeDL, str('-f'), str('bestvideo[height<=1080]+bestaudio'), videoURL]
+            else: # don't use the format string
+                subprocessArgs = [pathToYouTubeDL, videoURL]
+            subprocess.call(subprocessArgs)
 
     print "---------------------------------"
