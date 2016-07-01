@@ -46,6 +46,7 @@ if downloadLocation != 'False':
     os.chdir(downloadLocation)
 
 print "Syncing ToWatchList with '%s'" % os.getcwd()
+print "Found %i videos to try downloading." % len(myMarks)
 print "---------------------------------"
 
 for i in xrange(len(myMarks)):
@@ -69,8 +70,13 @@ for i in xrange(len(myMarks)):
             print "Downlading %s from %s" % (myMarks[i]['Mark']['title'], videoURL)
 
             if int(myMarks[i]['Mark']['source_site']) == 1: #youtube
-                # call youtube-dl to download the file, the -f argument limits things to 1080p (ie no 4K video)
-                subprocessArgs = [pathToYouTubeDL, str('-f'), str('bestvideo[height<=1080]+bestaudio'), videoURL]
+                # call youtube-dl to download the file
+                # the -f argument limits things to 1080p (ie no 4K video)
+                # --merge-output-format FORMAT     (recomended as mkv, webm is poorly supported by Kodi)
+                subprocessArgs = [pathToYouTubeDL,
+                                  str('-f'), str('bestvideo[height<=1080]+bestaudio'),
+                                  str('--merge-output-format'), str('mkv'),
+                                  videoURL]
             else: # don't use the format string
                 subprocessArgs = [pathToYouTubeDL, videoURL]
 
