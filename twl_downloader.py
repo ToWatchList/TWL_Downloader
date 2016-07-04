@@ -4,7 +4,7 @@
 
 from __future__ import unicode_literals
 import urllib2, base64, simplejson, subprocess, os, glob, ConfigParser, sys
-# import youtube_dl # TODO: in future do youtube_dl without needing to CLI with subprocess
+# import youtube_dl # TODO: in future do youtube_dl without needing to CLI with subprocess, for now it's more portable as a seperate install
 from datetime import datetime
 
 savepath = os.path.expanduser('~/.twl_downloader_settings.cfg')
@@ -71,15 +71,18 @@ for i in xrange(len(myMarks)):
 
             if int(myMarks[i]['Mark']['source_site']) == 1: #youtube
                 # call youtube-dl to download the file
-                # the -f argument limits things to 1080p (ie no 4K video)
-                # --merge-output-format FORMAT     (recomended as mkv, webm is poorly supported by Kodi)
+
+                # youtube-dl does a good job of getting you the best quality video, but these are some tweaks that helped get my perefered format
+                # the -f argument limits things to 1080p (ie no 4K video) and also prefer AVC video when possible (AVC is better in Kodi)
+                # --merge-output-format FORMAT (perefers mkv as it's flexible & widely supported in Kodi & others)
                 subprocessArgs = [pathToYouTubeDL,
-                                  str('-f'), str('bestvideo[height<=1080]+bestaudio'),
+                                  str('-f'), str('bestvideo[height<=1080][vcodec*=avc]+bestaudio/best[ext=mp4]/best'),
                                   str('--merge-output-format'), str('mkv'),
                                   videoURL]
-            else: # don't use the format string
+            else: # don't use the format string for Vimeo (or other sources)
                 subprocessArgs = [pathToYouTubeDL, videoURL]
 
+            # print "Calling:",subprocessArgs
             subprocess.call(subprocessArgs)
 
     print "---------------------------------"
