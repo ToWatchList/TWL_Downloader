@@ -60,8 +60,8 @@ for i in xrange(len(myMarks)):
             print "Removed watched or deleted video: '%s'" % filename
         continue
     else:
-        # if the file already exists (searching for filenames ending in mkv,mp4,ebm):
-        existingFiles = glob.glob('*-%s*[em][pkb][4vm]' % myMarks[i]['Mark']['video_id'])
+        # if the file already exists (searching for filenames ending in mkv, mov, mp4, & ebm):
+        existingFiles = glob.glob('*-%s*[em][pkbo][4vm]' % myMarks[i]['Mark']['video_id'])
         if len(existingFiles) >= 1:
             print "Already downloaded: '%s'" % myMarks[i]['Mark']['title']
         else:
