@@ -57,7 +57,7 @@ for i in xrange(len(myMarks)):
         filesToRemove = glob.glob('*-%s.*' % myMarks[i]['Mark']['video_id'])
         for filename in filesToRemove:
             os.remove(filename)
-            print "Removed watched or deleted video: '%s'" % filename
+            print "Removed watched or deleted video: '%s'" % filename.encode('utf-8')
         continue
     else:
         # if the file already exists (searching for filenames ending in mkv, mov, mp4, & ebm):
@@ -67,7 +67,7 @@ for i in xrange(len(myMarks)):
         else:
             # if it hasn't been downloaded or marked watched, try to download it now
             videoURL = myMarks[i]['Mark']['source_url']
-            print "Downlading %s from %s" % (myMarks[i]['Mark']['title'], videoURL)
+            print "Downlading %s from %s" % (myMarks[i]['Mark']['title'], videoURL.encode('utf-8'))
 
             if int(myMarks[i]['Mark']['source_site']) == 1: #youtube
                 # call youtube-dl to download the file
