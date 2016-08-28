@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# coding=utf-8
 # this script downloads a users latest ToWatchList unwatched videos using youtube-dl
 # youtube-dl is available here: http://rg3.github.io/youtube-dl/
 
@@ -57,30 +58,25 @@ for i in xrange(len(myMarks)):
         filesToRemove = glob.glob('*-%s.*' % myMarks[i]['Mark']['video_id'])
         for filename in filesToRemove:
             os.remove(filename)
-            print "Removed watched or deleted video: '%s'" % filename.encode('utf-8')
+            print ("Removed watched or deleted video: '%s'" % filename).encode('utf-8')
         continue
     else:
         # if the file already exists (searching for filenames ending in mkv, mov, mp4, & ebm):
         existingFiles = glob.glob('*-%s*[em][pkbo][4vm]' % myMarks[i]['Mark']['video_id'])
         if len(existingFiles) >= 1:
-            print "Already downloaded: '%s'" % myMarks[i]['Mark']['title']
+            print ("Already downloaded: '%s'" % myMarks[i]['Mark']['title']).encode('utf-8')
         else:
             # if it hasn't been downloaded or marked watched, try to download it now
             videoURL = myMarks[i]['Mark']['source_url']
-            print "Downlading %s from %s" % (myMarks[i]['Mark']['title'], videoURL.encode('utf-8'))
+            print ( "Downlading %s from %s" % (myMarks[i]['Mark']['title'], videoURL) ).encode('utf-8')
 
-            if int(myMarks[i]['Mark']['source_site']) == 1: #youtube
-                # call youtube-dl to download the file
-
-                # youtube-dl does a good job of getting you the best quality video, but these are some tweaks that helped get my perefered format
-                # the -f argument limits things to 1080p (ie no 4K video) and also prefer AVC video when possible (AVC is better in Kodi)
-                # --merge-output-format FORMAT (perefers mkv as it's flexible & widely supported in Kodi & others)
-                subprocessArgs = [pathToYouTubeDL,
-                                  str('-f'), str('bestvideo[height<=1080][vcodec*=avc]+bestaudio/best[ext=mp4]/best'),
-                                  str('--merge-output-format'), str('mkv'),
-                                  videoURL]
-            else: # don't use the format string for Vimeo (or other sources)
-                subprocessArgs = [pathToYouTubeDL, videoURL]
+            # youtube-dl does a good job of getting you the best quality video, but these are some tweaks that helped get my perefered format
+            # the -f argument limits things to 1080p (ie no 4K video when possible) and also prefer AVC video when possible (AVC is better in Kodi)
+            # --merge-output-format FORMAT (perefers mkv as it's flexible & widely supported in Kodi & others)
+            subprocessArgs = [pathToYouTubeDL,
+                              str('-f'), str('bestvideo[height<=1080][vcodec*=avc]+bestaudio/best[ext=mp4]/best'),
+                              str('--merge-output-format'), str('mkv'),
+                              videoURL]
 
             # print "Calling:",subprocessArgs
             subprocess.call(subprocessArgs)
