@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 # coding=utf-8
-import sys
-reload(sys)
-sys.setdefaultencoding('utf8')
-
 # this script downloads a users latest ToWatchList unwatched videos using youtube-dl
 # youtube-dl is available here: http://rg3.github.io/youtube-dl/
-#
-# from __future__ import unicode_literals
-import urllib2, simplejson, subprocess, os, glob, ConfigParser
+
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8') # this is a trick to get everything in utf-8, had trouble with funky chars from YouTube without it
+import subprocess, os, glob, ConfigParser, requests
 # import youtube_dl # TODO: in future do youtube_dl without needing to CLI with subprocess, for now it's more portable as a seperate install
 from datetime import datetime
 from HTMLParser import HTMLParser
@@ -38,6 +36,10 @@ apiKey = config.get('twl_downloader_settings', 'apiKey')
 pathToYouTubeDL   = config.get('twl_downloader_settings', 'pathToYouTubeDL')
 downloadLocation  = config.get('twl_downloader_settings', 'downloadLocation')
 
+# Options added later with auto-set defaults
+try: writeNFOfiles = config.get('twl_downloader_settings', 'writeNFOfiles')
+except ConfigParser.NoOptionError: writeNFOfiles = False
+
 # get all the data from the last few days:
 refreshTimeString = '-28days' #alternate relative English string will be parsed by PHP on the server side
 
@@ -47,24 +49,15 @@ config.add_section('twl_downloader_settings')
 config.set('twl_downloader_settings', 'apiKey',           apiKey)
 config.set('twl_downloader_settings', 'pathToYouTubeDL',  pathToYouTubeDL)
 config.set('twl_downloader_settings', 'downloadLocation', downloadLocation)
+config.set('twl_downloader_settings', 'writeNFOfiles',    writeNFOfiles)
 
 # Writing our config file
 with open(savepath, 'wb') as configfile:
     config.write(configfile)
 
-writeNFOfiles = True
-
-# create our request url
-TWL_API_URL = "https://towatchlist.com/api/v1/marks?since=%s&uid=%s" % (refreshTimeString, apiKey)
-
-# create the headers
-headers = {'Accept': 'application/json',}
-# create the API request
-request = urllib2.Request(TWL_API_URL, None, headers)
-# perform the request
-result = urllib2.urlopen(request)
-# array of the results
-myMarks = simplejson.loads(result.read())['marks']
+# get updated marks from the server
+r = requests.get( "https://towatchlist.com/api/v1/marks?since=%s&uid=%s" % (refreshTimeString, apiKey) )
+myMarks = r.json()['marks']
 
 if downloadLocation != 'False':
     # change directory to download location if it was set
@@ -116,7 +109,7 @@ for i in xrange(len(myMarks)):
             print ( "Downlading %s from %s" % (title, videoURL) ).encode('utf-8')
 
             # youtube-dl does a good job of getting you the best quality video, but these are some tweaks that helped get my perefered format
-            # the -f argument limits things to 1080p (ie no 4K video when possible) and also prefer AVC video when possible (AVC is better in Kodi)
+            # the -f argument limits things to 1080p (ie no 4K video when possible) and also prefer AVC video when possible (AVC works best for wide support)
             # --merge-output-format FORMAT (perefers mkv as it's flexible & widely supported in Kodi & others)
             subprocessArgs = [pathToYouTubeDL,
                               str('-f'), str('bestvideo[height<=1080][vcodec*=avc]+bestaudio/best[ext=mp4]/best'),
