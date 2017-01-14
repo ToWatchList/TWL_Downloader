@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     try: kodiHostname = config.get('twl_downloader_settings', 'kodiHostname')
     except ConfigParser.NoOptionError: kodiHostname = None
-    
+
     # get all the data from the last few days:
     refreshTimeString = '-28days' #alternate relative English string will be parsed by PHP on the server side
 
@@ -75,6 +75,7 @@ if __name__ == '__main__':
     config.set('twl_downloader_settings', 'pathToYouTubeDL',  pathToYouTubeDL)
     config.set('twl_downloader_settings', 'downloadLocation', downloadLocation)
     config.set('twl_downloader_settings', 'writeNFOfiles',    writeNFOfiles)
+    config.set('twl_downloader_settings', 'kodiHostname',     kodiHostname)
 
     # Writing our config file
     with open(savepath, 'wb') as configfile:
@@ -100,11 +101,12 @@ if __name__ == '__main__':
         videoURL      = myMarks[i]['Mark']['source_url']
         # thumbURL      = myMarks[i]['Mark']['thumb_url'].replace('/default.jpg', '/maxresdefault.jpg').replace('_120x90.jpg', '_1280x720.jpg')
         title         = myMarks[i]['Mark']['title']
-        description   = strip_tags(myMarks[i]['Mark']['comment'])
         video_id      = myMarks[i]['Mark']['video_id']
         channel_title = myMarks[i]['Mark']['channel_title']
         duration      = int(myMarks[i]['Mark']['duration']) / 60.0
         created       = myMarks[i]['Mark']['created']
+        try:    description = strip_tags(myMarks[i]['Mark']['comment'])
+        except: description = '-Failed to parse-'
 
         # skip if it's been marked as watched
         if (myMarks[i]['Mark']['watched']) or (myMarks[i]['Mark']['delflag']):
