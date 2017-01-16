@@ -27,8 +27,9 @@ def strip_tags(html):
     s.feed(html)
     return s.get_data()
 
-def updateKodiLibrary(hostname, port = 8080, user = None, password = None, ScanOrClean = 'Scan' ):
+def updateKodiLibrary(hostname, port = None, user = None, password = None, ScanOrClean = 'Scan' ):
     assert ScanOrClean == 'Scan' or ScanOrClean == 'Clean', '\nERROR: ScanOrClean must be either "Scan" or "Clean"'
+    if not port: port = 8080 # Kodi Web default port
     r = requests.get('http://%s:%s@%s:%i/jsonrpc?request={"jsonrpc":"2.0","method":"VideoLibrary.%s","id":"twl_downloader"}' \
                         % (user, password, hostname, port, ScanOrClean) )
     assert r.status_code == requests.codes.ok, '\nERROR: bad response code; check settings & Kodi availablity'
@@ -65,6 +66,15 @@ if __name__ == '__main__':
     try: kodiHostname = config.get('twl_downloader_settings', 'kodiHostname')
     except ConfigParser.NoOptionError: kodiHostname = None
 
+    try: kodiPort = config.get('twl_downloader_settings', 'kodiPort')
+    except ConfigParser.NoOptionError: kodiPort = None
+
+    try: kodiUser = config.get('twl_downloader_settings', 'kodiUser')
+    except ConfigParser.NoOptionError: kodiUser = None
+
+    try: kodiPassword = config.get('twl_downloader_settings', 'kodiPassword')
+    except ConfigParser.NoOptionError: kodiPassword = None
+
     # get all the data from the last few days:
     refreshTimeString = '-28days' #alternate relative English string will be parsed by PHP on the server side
 
@@ -76,6 +86,9 @@ if __name__ == '__main__':
     config.set('twl_downloader_settings', 'downloadLocation', downloadLocation)
     config.set('twl_downloader_settings', 'writeNFOfiles',    writeNFOfiles)
     config.set('twl_downloader_settings', 'kodiHostname',     kodiHostname)
+    config.set('twl_downloader_settings', 'kodiPort',         kodiPort)
+    config.set('twl_downloader_settings', 'kodiUser',         kodiUser)
+    config.set('twl_downloader_settings', 'kodiPassword',     kodiPassword)
 
     # Writing our config file
     with open(savepath, 'wb') as configfile:
@@ -163,10 +176,10 @@ if __name__ == '__main__':
     if kodiHostname:
         if shouldScanKodi:
             print "Scanning Kodi Library (@ %s)" % kodiHostname
-            updateKodiLibrary(kodiHostname, ScanOrClean = 'Scan')
+            updateKodiLibrary(kodiHostname, ScanOrClean = 'Scan', kodiPort = kodiPort, kodiUser = kodiUser, kodiPassword = kodiPassword)
         if shouldCleanKodi:
             print "Cleaning Kodi Library (@ %s)" % kodiHostname
-            updateKodiLibrary(kodiHostname, ScanOrClean = 'Clean')
+            updateKodiLibrary(kodiHostname, ScanOrClean = 'Clean', kodiPort = kodiPort, kodiUser = kodiUser, kodiPassword = kodiPassword)
         if not shouldCleanKodi and not shouldScanKodi:
             print "No Scan or Clean of Kodi (@ %s) needed" % kodiHostname
 
