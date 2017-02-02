@@ -10,6 +10,8 @@ import subprocess, os, glob, ConfigParser, requests
 # import youtube_dl # TODO: in future do youtube_dl without needing to CLI with subprocess, for now it's more portable as a seperate install
 from datetime import datetime
 from HTMLParser import HTMLParser
+# https://github.com/jcsaaddupuy/python-kodijson
+from kodijson import Kodi
 
 # to strip HTML tags via:
 # http://stackoverflow.com/a/925630/1304462
@@ -26,13 +28,6 @@ def strip_tags(html):
     s = MLStripper()
     s.feed(html)
     return s.get_data()
-
-def updateKodiLibrary(hostname, port = None, user = None, password = None, ScanOrClean = 'Scan' ):
-    assert ScanOrClean == 'Scan' or ScanOrClean == 'Clean', '\nERROR: ScanOrClean must be either "Scan" or "Clean"'
-    if not port: port = 8080 # Kodi Web default port
-    r = requests.get('http://%s:%s@%s:%i/jsonrpc?request={"jsonrpc":"2.0","method":"VideoLibrary.%s","id":"twl_downloader"}' \
-                        % (user, password, hostname, port, ScanOrClean) )
-    assert r.status_code == requests.codes.ok, '\nERROR: bad response code; check settings & Kodi availablity'
 
 def findVideoFilesForVideoID(video_id, expect1 = False):
     # searching for filenames ending in mkv, mov, mp4, & ebm
@@ -90,6 +85,16 @@ if __name__ == '__main__':
     config.set('twl_downloader_settings', 'kodiUser',         kodiUser)
     config.set('twl_downloader_settings', 'kodiPassword',     kodiPassword)
 
+    # fix 'None' string -> None
+    if apiKey           == 'None': apiKey           = None
+    if pathToYouTubeDL  == 'None': pathToYouTubeDL  = None
+    if downloadLocation == 'None': downloadLocation = None
+    if writeNFOfiles    == 'None': writeNFOfiles    = None
+    if kodiHostname     == 'None': kodiHostname     = None
+    if kodiPort         == 'None': kodiPort         = None
+    if kodiUser         == 'None': kodiUser         = None
+    if kodiPassword     == 'None': kodiPassword     = None
+
     # Writing our config file
     with open(savepath, 'wb') as configfile:
         config.write(configfile)
@@ -106,8 +111,7 @@ if __name__ == '__main__':
     print "Found %i videos to try downloading." % len(myMarks)
     print "---------------------------------"
 
-    shouldCleanKodi = False
-    shouldScanKodi  = False
+    shouldCleanKodi = shouldScanKodi = False
 
     for i in xrange(len(myMarks)):
         # set some values we'll use below
@@ -174,12 +178,18 @@ if __name__ == '__main__':
         print "---------------------------------"
 
     if kodiHostname:
+        #Login with custom credentials
+        if not kodiPort: kodiPort = 8080 # Kodi Web default port
+        kodi = Kodi("http://%s:%i/jsonrpc" % (kodiHostname, kodiPort), kodiUser, kodiPassword)
+        assert kodi.JSONRPC.Ping()['result'] == 'pong', '\nERROR: bad or response from Kodi (@ %s)' % kodiHostname
+        if shouldScanKodi or shouldCleanKodi:
+            kodi.GUI.ShowNotification({"title":"ToWatchList Downloader", "message":"New videos downloaded, update Kodi library…"})
         if shouldScanKodi:
             print "Scanning Kodi Library (@ %s)" % kodiHostname
-            updateKodiLibrary(kodiHostname, ScanOrClean = 'Scan', kodiPort = kodiPort, kodiUser = kodiUser, kodiPassword = kodiPassword)
+            kodi.VideoLibrary.Scan()
         if shouldCleanKodi:
             print "Cleaning Kodi Library (@ %s)" % kodiHostname
-            updateKodiLibrary(kodiHostname, ScanOrClean = 'Clean', kodiPort = kodiPort, kodiUser = kodiUser, kodiPassword = kodiPassword)
+            kodi.VideoLibrary.Clean()
         if not shouldCleanKodi and not shouldScanKodi:
             print "No Scan or Clean of Kodi (@ %s) needed" % kodiHostname
 
