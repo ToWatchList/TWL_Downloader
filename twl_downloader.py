@@ -3,7 +3,7 @@
 # this script downloads a users latest ToWatchList unwatched videos using youtube-dl
 # youtube-dl is available here: http://rg3.github.io/youtube-dl/
 
-import sys
+import sys, os, shutil
 reload(sys)
 sys.setdefaultencoding('utf8') # this is a trick to get everything in utf-8, had trouble with funky chars from YouTube without it
 import subprocess, os, glob, ConfigParser, requests
@@ -29,19 +29,31 @@ def strip_tags(html):
     s.feed(html)
     return s.get_data()
 
-def findVideoFilesForVideoID(video_id, expect1 = False):
+def findVideoFilesForVideoID(video_id, downloadDir = None, expect1 = False):
     # searching for filenames ending in mkv, mov, mp4, & ebm
-    foundFiles = glob.glob('*-%s*[em][pkbo][4vm]' % video_id)
+    if downloadDir and os.path.isdir(downloadDir):
+        foundFiles = glob.glob(os.path.join( downloadDir, '*-%s*[em][pkbo][4vm]' % video_id) )
+    else:
+        foundFiles = glob.glob('*-%s*[em][pkbo][4vm]' % video_id)
     assert len(foundFiles) <= 1, '\nERROR: found more than one video match for video_id "%s"' % video_id
     if len(foundFiles) == 1: return foundFiles[0]
-    if expect1: sys.exit('\nERROR: we expected to find one file here and found none for video_id %s' % video_id)
+    if expect1:
+        print
+        print foundFiles
+        sys.exit('ERROR: we expected to find one file here and found none for video_id %s' % video_id)
     return False
 
-def findNFOFilesForVideoID(video_id, expect1 = False):
-    foundFiles = glob.glob('*-%s*nfo' % video_id)
+def findNFOFilesForVideoID(video_id, downloadDir = None, expect1 = False):
+    if downloadDir and os.path.isdir(downloadDir):
+        foundFiles = glob.glob(os.path.join( downloadDir, '*-%s*nfo' % video_id) )
+    else:
+        foundFiles = glob.glob( '*-%s*nfo' % video_id )
     assert len(foundFiles) <= 1, '\nERROR: found more than one NFO match for video_id "%s"' % video_id
     if len(foundFiles) == 1: return foundFiles[0]
-    if expect1: sys.exit('\nERROR: we expected to find one file here and found none for video_id %s' % video_id)
+    if expect1:
+        print
+        print foundFiles
+        sys.exit('ERROR: we expected to find one file here and found none for video_id %s' % video_id)
     return False
 
 if __name__ == '__main__':
@@ -70,6 +82,9 @@ if __name__ == '__main__':
     try: kodiPassword = config.get('twl_downloader_settings', 'kodiPassword')
     except ConfigParser.NoOptionError: kodiPassword = None
 
+    try: downloadToTmp = config.get('twl_downloader_settings', 'downloadToTmp')
+    except ConfigParser.NoOptionError: downloadToTmp = True
+
     # get all the data from the last few days:
     refreshTimeString = '-28days' #alternate relative English string will be parsed by PHP on the server side
 
@@ -84,12 +99,12 @@ if __name__ == '__main__':
     config.set('twl_downloader_settings', 'kodiPort',         kodiPort)
     config.set('twl_downloader_settings', 'kodiUser',         kodiUser)
     config.set('twl_downloader_settings', 'kodiPassword',     kodiPassword)
+    config.set('twl_downloader_settings', 'downloadToTmp',    downloadToTmp)
 
     # fix 'None' string -> None
     if apiKey           == 'None': apiKey           = None
     if pathToYouTubeDL  == 'None': pathToYouTubeDL  = None
     if downloadLocation == 'None': downloadLocation = None
-    if writeNFOfiles    == 'None': writeNFOfiles    = None
     if kodiHostname     == 'None': kodiHostname     = None
     if kodiPort         == 'None': kodiPort         = None
     if kodiUser         == 'None': kodiUser         = None
@@ -103,9 +118,11 @@ if __name__ == '__main__':
     r = requests.get( "https://towatchlist.com/api/v1/marks?since=%s&uid=%s" % (refreshTimeString, apiKey) )
     myMarks = r.json()['marks']
 
-    if downloadLocation != 'False':
+    if downloadLocation != 'False' and downloadToTmp == 'False':
         # change directory to download location if it was set
         os.chdir(downloadLocation)
+    elif downloadToTmp == 'True':
+        os.chdir('/tmp')
 
     print "Syncing ToWatchList with '%s'" % os.getcwd()
     print "Found %i videos to try downloading." % len(myMarks)
@@ -128,14 +145,14 @@ if __name__ == '__main__':
         # skip if it's been marked as watched
         if (myMarks[i]['Mark']['watched']) or (myMarks[i]['Mark']['delflag']):
             # it's been marked as watched, delete the local copy
-            for filename in glob.glob('*-%s.*' % video_id):
+            for filename in glob.glob( os.path.join( downloadLocation, '*-%s.*' % video_id )):
                 os.remove(filename)
                 print ("Removed watched or deleted videos & NFOs: '%s'" % filename).encode('utf-8')
                 shouldCleanKodi = True
             continue
         else:
             # if the file already exists
-            if findVideoFilesForVideoID(video_id):
+            if findVideoFilesForVideoID(video_id, downloadDir = downloadLocation):
                 print ("Already downloaded: '%s'" % title).encode('utf-8')
             else:
                 # if it hasn't been downloaded or marked watched, try to download it now
@@ -151,14 +168,19 @@ if __name__ == '__main__':
                 subprocess.call(subprocessArgs)
                 shouldScanKodi = True
 
+                if downloadToTmp: # now move files into place
+                    foundVideoFile = findVideoFilesForVideoID(video_id, expect1=True)
+                    print "Move %s to %s" % (foundVideoFile, downloadLocation)
+                    shutil.move(foundVideoFile, downloadLocation)
+
             if writeNFOfiles:
                 # get info/metadata for file and save it as NFO
-                if findNFOFilesForVideoID(video_id):
+                if findNFOFilesForVideoID(video_id, downloadDir = downloadLocation):
                     # print ("Already set NFO metadata for '%s'" % title).encode('utf-8')
                     pass
                 else:
                     # create an .nfo metadata file for Kodi etc
-                    foundVideoFile = findVideoFilesForVideoID(video_id, expect1=True)
+                    foundVideoFile = findVideoFilesForVideoID(video_id, downloadDir = downloadLocation, expect1=True)
                     nfoFilePath = os.path.splitext(foundVideoFile)[0] + '.nfo'
 
                     # we have the default thumbnail url which is lower quality, look up a better one:
