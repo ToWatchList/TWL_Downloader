@@ -4,6 +4,7 @@ ToWatchList Downloader or `twl_downloader.py` is Python script to automate downl
 
 Requirements
 ------------
+- [ToWatchList.com](https://towatchlist.com) account
 - Python 2.7 or later - The scripts have been tested on Python 2.7.3 on Linux, and 2.7.5 on Mac.
 - [youtube-dl](http://rg3.github.io/youtube-dl/) - Must be the latest version
 
