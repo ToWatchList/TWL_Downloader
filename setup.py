@@ -1,7 +1,15 @@
 #!/usr/bin/env python
 # this script helps the user set values for the main script.
 
-import urllib2, base64, simplejson, subprocess, os, glob, sys, getpass, ConfigParser
+import urllib2
+import base64
+import simplejson
+import subprocess
+import os
+import glob
+import sys
+import getpass
+import ConfigParser
 from datetime import datetime, timedelta
 
 # 'which' & 'is_exe' code snipet via:
