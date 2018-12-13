@@ -1,6 +1,6 @@
 ToWatchList Downloader
 ======================
-ToWatchList Downloader or `twl_downloader.py` is Python script to automate downloading videos from ToWatchList.com
+ToWatchList Downloader or `twl_downloader.py` is Python script to automate downloading videos from [ToWatchList.com](https://towatchlist.com)
 
 Requirements
 ------------
