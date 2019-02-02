@@ -63,27 +63,27 @@ if __name__ == '__main__':
     config.read(savepath)
 
     apiKey           = config.get('twl_downloader_settings', 'apiKey')
-    pathToYouTubeDL  = config.get('twl_downloader_settings', 'pathToYouTubeDL')
-    downloadLocation = config.get('twl_downloader_settings', 'downloadLocation')
+    pathtoyoutubedl  = config.get('twl_downloader_settings', 'pathtoyoutubedl')
+    downloadlocation = config.get('twl_downloader_settings', 'downloadlocation')
 
     # Options added later with auto-set defaults
-    try: writeNFOfiles = config.get('twl_downloader_settings', 'writeNFOfiles')
-    except ConfigParser.NoOptionError: writeNFOfiles = False
+    try: writenfofiles = config.getboolean('twl_downloader_settings', 'writenfofiles')
+    except ConfigParser.NoOptionError: writenfofiles = False
 
-    try: kodiHostname = config.get('twl_downloader_settings', 'kodiHostname')
-    except ConfigParser.NoOptionError: kodiHostname = None
+    try: kodihostname = config.get('twl_downloader_settings', 'kodihostname')
+    except ConfigParser.NoOptionError: kodihostname = None
 
-    try: kodiPort = config.get('twl_downloader_settings', 'kodiPort')
-    except ConfigParser.NoOptionError: kodiPort = None
+    try: kodiport = config.get('twl_downloader_settings', 'kodiport')
+    except ConfigParser.NoOptionError: kodiport = None
 
-    try: kodiUser = config.get('twl_downloader_settings', 'kodiUser')
-    except ConfigParser.NoOptionError: kodiUser = None
+    try: kodiuser = config.get('twl_downloader_settings', 'kodiuser')
+    except ConfigParser.NoOptionError: kodiuser = None
 
-    try: kodiPassword = config.get('twl_downloader_settings', 'kodiPassword')
-    except ConfigParser.NoOptionError: kodiPassword = None
+    try: kodipassword = config.get('twl_downloader_settings', 'kodipassword')
+    except ConfigParser.NoOptionError: kodipassword = None
 
-    try: downloadToTmp = config.get('twl_downloader_settings', 'downloadToTmp')
-    except ConfigParser.NoOptionError: downloadToTmp = True
+    try: downloadtotmp = config.getboolean('twl_downloader_settings', 'downloadtotmp')
+    except ConfigParser.NoOptionError: downloadtotmp = True
 
     # get all the data from the last few days:
     refreshTimeString = '-28days' #alternate relative English string will be parsed by PHP on the server side
@@ -92,23 +92,23 @@ if __name__ == '__main__':
     config = ConfigParser.RawConfigParser()
     config.add_section('twl_downloader_settings')
     config.set('twl_downloader_settings', 'apiKey',           apiKey)
-    config.set('twl_downloader_settings', 'pathToYouTubeDL',  pathToYouTubeDL)
-    config.set('twl_downloader_settings', 'downloadLocation', downloadLocation)
-    config.set('twl_downloader_settings', 'writeNFOfiles',    writeNFOfiles)
-    config.set('twl_downloader_settings', 'kodiHostname',     kodiHostname)
-    config.set('twl_downloader_settings', 'kodiPort',         kodiPort)
-    config.set('twl_downloader_settings', 'kodiUser',         kodiUser)
-    config.set('twl_downloader_settings', 'kodiPassword',     kodiPassword)
-    config.set('twl_downloader_settings', 'downloadToTmp',    downloadToTmp)
+    config.set('twl_downloader_settings', 'pathtoyoutubedl',  pathtoyoutubedl)
+    config.set('twl_downloader_settings', 'downloadlocation', downloadlocation)
+    config.set('twl_downloader_settings', 'writenfofiles',    writenfofiles)
+    config.set('twl_downloader_settings', 'kodihostname',     kodihostname)
+    config.set('twl_downloader_settings', 'kodiport',         kodiport)
+    config.set('twl_downloader_settings', 'kodiuser',         kodiuser)
+    config.set('twl_downloader_settings', 'kodipassword',     kodipassword)
+    config.set('twl_downloader_settings', 'downloadtotmp',    downloadtotmp)
 
     # fix 'None' string -> None
     if apiKey           == 'None': apiKey           = None
-    if pathToYouTubeDL  == 'None': pathToYouTubeDL  = None
-    if downloadLocation == 'None': downloadLocation = None
-    if kodiHostname     == 'None': kodiHostname     = None
-    if kodiPort         == 'None': kodiPort         = None
-    if kodiUser         == 'None': kodiUser         = None
-    if kodiPassword     == 'None': kodiPassword     = None
+    if pathtoyoutubedl  == 'None': pathtoyoutubedl  = None
+    if downloadlocation == 'None': downloadlocation = None
+    if kodihostname     == 'None': kodihostname     = None
+    if kodiport         == 'None': kodiport         = None
+    if kodiuser         == 'None': kodiuser         = None
+    if kodipassword     == 'None': kodipassword     = None
 
     # Writing our config file
     with open(savepath, 'wb') as configfile:
@@ -118,11 +118,11 @@ if __name__ == '__main__':
     r = requests.get( "https://towatchlist.com/api/v1/marks?since=%s&uid=%s" % (refreshTimeString, apiKey) )
     myMarks = r.json()['marks']
 
-    if downloadLocation != 'False' and downloadToTmp == 'False':
-        # change directory to download location if it was set
-        os.chdir(downloadLocation)
-    elif downloadToTmp == 'True':
+    # change directory to download location
+    if downloadtotmp:
         os.chdir('/tmp')
+    elif downloadlocation:
+        os.chdir(downloadlocation)
 
     print "Syncing ToWatchList with '%s'" % os.getcwd()
     print "Found %i videos to try downloading." % len(myMarks)
@@ -145,14 +145,14 @@ if __name__ == '__main__':
         # skip if it's been marked as watched
         if (myMarks[i]['Mark']['watched']) or (myMarks[i]['Mark']['delflag']):
             # it's been marked as watched, delete the local copy
-            for filename in glob.glob( os.path.join( downloadLocation, '*-%s.*' % video_id )):
+            for filename in glob.glob( os.path.join( downloadlocation, '*-%s.*' % video_id )):
                 os.remove(filename)
                 print ("Removed watched or deleted videos & NFOs: '%s'" % filename).encode('utf-8')
                 shouldCleanKodi = True
             continue
         else:
             # if the file already exists
-            if findVideoFilesForVideoID(video_id, downloadDir = downloadLocation):
+            if findVideoFilesForVideoID(video_id, downloadDir = downloadlocation):
                 print ("Already downloaded: '%s'" % title).encode('utf-8')
             else:
                 # if it hasn't been downloaded or marked watched, try to download it now
@@ -161,30 +161,30 @@ if __name__ == '__main__':
                 # youtube-dl does a good job of getting you the best quality video, but these are some tweaks that helped get my perefered format
                 # the -f argument limits things to 1080p (ie no 4K video when possible) and also prefer AVC video when possible (AVC works best for wide support)
                 # --merge-output-format FORMAT (perefers mkv as it's flexible & widely supported in Kodi & others)
-                subprocessArgs = [pathToYouTubeDL,
+                subprocessArgs = [pathtoyoutubedl,
                                   str('-f'), str('bestvideo[height<=1080][vcodec*=avc]+bestaudio/best[ext=mp4]/best'),
                                   str('--merge-output-format'), str('mkv'),
                                   videoURL]
                 subprocess.call(subprocessArgs)
                 shouldScanKodi = True
 
-                if downloadToTmp: # now move files into place
+                if downloadtotmp: # now move files into place
                     foundVideoFile = findVideoFilesForVideoID(video_id, expect1=True)
-                    print "Move %s to %s" % (foundVideoFile, downloadLocation)
-                    shutil.move(foundVideoFile, downloadLocation)
+                    print "Move %s to %s" % (foundVideoFile, downloadlocation)
+                    shutil.move(foundVideoFile, downloadlocation)
 
-            if writeNFOfiles:
+            if writenfofiles:
                 # get info/metadata for file and save it as NFO
-                if findNFOFilesForVideoID(video_id, downloadDir = downloadLocation):
+                if findNFOFilesForVideoID(video_id, downloadDir = downloadlocation):
                     # print ("Already set NFO metadata for '%s'" % title).encode('utf-8')
                     pass
                 else:
                     # create an .nfo metadata file for Kodi etc
-                    foundVideoFile = findVideoFilesForVideoID(video_id, downloadDir = downloadLocation, expect1=True)
+                    foundVideoFile = findVideoFilesForVideoID(video_id, downloadDir = downloadlocation, expect1=True)
                     nfoFilePath = os.path.splitext(foundVideoFile)[0] + '.nfo'
 
                     # we have the default thumbnail url which is lower quality, look up a better one:
-                    thumbURL = subprocess.check_output([pathToYouTubeDL, '--get-thumbnail', videoURL]).strip()
+                    thumbURL = subprocess.check_output([pathtoyoutubedl, '--get-thumbnail', videoURL]).strip()
 
                     with open(nfoFilePath, "w") as nfoF:
                         nfoF.write("<episodedetails>\n")
@@ -199,21 +199,21 @@ if __name__ == '__main__':
 
         print "---------------------------------"
 
-    if kodiHostname:
+    if kodihostname:
         #Login with custom credentials
-        if not kodiPort: kodiPort = 8080 # Kodi Web default port
-        kodi = Kodi("http://%s:%i/jsonrpc" % (kodiHostname, kodiPort), kodiUser, kodiPassword)
-        assert kodi.JSONRPC.Ping()['result'] == 'pong', '\nERROR: bad or response from Kodi (@ %s)' % kodiHostname
+        if not kodiport: kodiport = 8080 # Kodi Web default port
+        kodi = Kodi("http://%s:%i/jsonrpc" % (kodihostname, kodiport), kodiuser, kodipassword)
+        assert kodi.JSONRPC.Ping()['result'] == 'pong', '\nERROR: bad or response from Kodi (@ %s)' % kodihostname
         if shouldScanKodi or shouldCleanKodi:
             kodi.GUI.ShowNotification({"title":"ToWatchList Downloader", "message":"New videos downloaded, update Kodi library…"})
         if shouldScanKodi:
-            print "Scanning Kodi Library (@ %s)" % kodiHostname
+            print "Scanning Kodi Library (@ %s)" % kodihostname
             kodi.VideoLibrary.Scan()
         if shouldCleanKodi:
-            print "Cleaning Kodi Library (@ %s)" % kodiHostname
+            print "Cleaning Kodi Library (@ %s)" % kodihostname
             kodi.VideoLibrary.Clean()
         if not shouldCleanKodi and not shouldScanKodi:
-            print "No Scan or Clean of Kodi (@ %s) needed" % kodiHostname
+            print "No Scan or Clean of Kodi (@ %s) needed" % kodihostname
 
 # Info/formatting for NFO example
 # <episodedetails>
