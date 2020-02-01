@@ -6,7 +6,7 @@
 import sys, os, shutil
 reload(sys)
 sys.setdefaultencoding('utf8') # this is a trick to get everything in utf-8, had trouble with funky chars from YouTube without it
-import subprocess, os, glob, ConfigParser, requests
+import subprocess, os, glob, ConfigParser, requests, shlex
 # import youtube_dl # TODO: in future do youtube_dl without needing to CLI with subprocess, for now it's more portable as a seperate install
 from datetime import datetime
 from HTMLParser import HTMLParser
@@ -38,8 +38,7 @@ def findVideoFilesForVideoID(video_id, downloadDir = None, expect1 = False):
     assert len(foundFiles) <= 1, '\nERROR: found more than one video match for video_id "%s"' % video_id
     if len(foundFiles) == 1: return foundFiles[0]
     if expect1:
-        print
-        print foundFiles
+        print('\n' + foundFiles)
         sys.exit('ERROR: we expected to find one file here and found none for video_id %s' % video_id)
     return False
 
@@ -51,8 +50,7 @@ def findNFOFilesForVideoID(video_id, downloadDir = None, expect1 = False):
     assert len(foundFiles) <= 1, '\nERROR: found more than one NFO match for video_id "%s"' % video_id
     if len(foundFiles) == 1: return foundFiles[0]
     if expect1:
-        print
-        print foundFiles
+        print('\n' + foundFiles)
         sys.exit('ERROR: we expected to find one file here and found none for video_id %s' % video_id)
     return False
 
@@ -147,30 +145,31 @@ if __name__ == '__main__':
             # it's been marked as watched, delete the local copy
             for filename in glob.glob( os.path.join( downloadlocation, '*-%s.*' % video_id )):
                 os.remove(filename)
-                print ("Removed watched or deleted videos & NFOs: '%s'" % filename).encode('utf-8')
+                print("Removed watched or deleted videos & NFOs: '%s'" % filename).encode('utf-8')
                 shouldCleanKodi = True
             continue
         else:
             # if the file already exists
             if findVideoFilesForVideoID(video_id, downloadDir = downloadlocation):
-                print ("Already downloaded: '%s'" % title).encode('utf-8')
+                print("Already downloaded: '%s'" % title).encode('utf-8')
             else:
                 # if it hasn't been downloaded or marked watched, try to download it now
-                print ( "Downlading %s from %s" % (title, videoURL) ).encode('utf-8')
-
+                print("Downlading %s from %s" % (title, videoURL) ).encode('utf-8')
                 # youtube-dl does a good job of getting you the best quality video, but these are some tweaks that helped get my perefered format
-                # the -f argument limits things to 1080p (ie no 4K video when possible) and also prefer AVC video when possible (AVC works best for wide support)
+                # the -f argument limits things to 1080p (ie no 4K video when possible) and also prefer AVC video when possible (AVC has wide support)
                 # --merge-output-format FORMAT (perefers mkv as it's flexible & widely supported in Kodi & others)
-                subprocessArgs = [pathtoyoutubedl,
-                                  str('-f'), str('bestvideo[height<=1080][vcodec*=avc]+bestaudio/best[ext=mp4]/best'),
-                                  str('--merge-output-format'), str('mkv'),
-                                  videoURL]
-                subprocess.call(subprocessArgs)
+                # You might prefer other options though so feel free to edit as needed
+                subprocessCommand = [pathtoyoutubedl,
+                                      '-f bestvideo[height<=1080][vcodec*=avc]+bestaudio/best',
+                                      '--merge-output-format mp4',
+                                      '--add-metadata --all-subs --embed-subs --embed-thumbnail',
+                                      videoURL]
+                subprocess.call(shlex.split(" ".join(subprocessArgs)))
                 shouldScanKodi = True
 
                 if downloadtotmp: # now move files into place
                     foundVideoFile = findVideoFilesForVideoID(video_id, expect1=True)
-                    print "Move %s to %s" % (foundVideoFile, downloadlocation)
+                    print("Move %s to %s" % (foundVideoFile, downloadlocation))
                     shutil.move(foundVideoFile, downloadlocation)
 
             if writenfofiles:
@@ -197,7 +196,7 @@ if __name__ == '__main__':
                         nfoF.write("  <videourl>%s</videourl>\n" % videoURL)
                         nfoF.write("</episodedetails>\n")
 
-        print "---------------------------------"
+        print("---------------------------------")
 
     if kodihostname:
         #Login with custom credentials
@@ -207,13 +206,13 @@ if __name__ == '__main__':
         if shouldScanKodi or shouldCleanKodi:
             kodi.GUI.ShowNotification({"title":"ToWatchList Downloader", "message":"New videos downloaded, update Kodi library…"})
         if shouldScanKodi:
-            print "Scanning Kodi Library (@ %s)" % kodihostname
+            print("Scanning Kodi Library (@ %s)" % kodihostname)
             kodi.VideoLibrary.Scan()
         if shouldCleanKodi:
-            print "Cleaning Kodi Library (@ %s)" % kodihostname
+            print("Cleaning Kodi Library (@ %s)" % kodihostname)
             kodi.VideoLibrary.Clean()
         if not shouldCleanKodi and not shouldScanKodi:
-            print "No Scan or Clean of Kodi (@ %s) needed" % kodihostname
+            print("No Scan or Clean of Kodi (@ %s) needed" % kodihostname)
 
 # Info/formatting for NFO example
 # <episodedetails>
