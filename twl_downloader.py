@@ -122,9 +122,9 @@ if __name__ == '__main__':
     elif downloadlocation:
         os.chdir(downloadlocation)
 
-    print "Syncing ToWatchList with '%s'" % os.getcwd()
-    print "Found %i videos to try downloading." % len(myMarks)
-    print "---------------------------------"
+    print("Syncing ToWatchList with '%s'" % os.getcwd())
+    print("Found %i videos to try downloading." % len(myMarks))
+    print("---------------------------------")
 
     shouldCleanKodi = shouldScanKodi = False
 
@@ -175,7 +175,7 @@ if __name__ == '__main__':
             if writenfofiles:
                 # get info/metadata for file and save it as NFO
                 if findNFOFilesForVideoID(video_id, downloadDir = downloadlocation):
-                    # print ("Already set NFO metadata for '%s'" % title).encode('utf-8')
+                    # print(("Already set NFO metadata for '%s'" % title).encode('utf-8'))
                     pass
                 else:
                     # create an .nfo metadata file for Kodi etc
