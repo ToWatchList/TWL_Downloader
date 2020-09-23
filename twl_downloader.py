@@ -6,10 +6,10 @@
 import sys, os, shutil
 reload(sys)
 sys.setdefaultencoding('utf8') # this is a trick to get everything in utf-8, had trouble with funky chars from YouTube without it
-import subprocess, os, glob, ConfigParser, requests, shlex
+import subprocess, os, glob, configparser, requests, shlex
 # import youtube_dl # TODO: in future do youtube_dl without needing to CLI with subprocess, for now it's more portable as a seperate install
 from datetime import datetime
-from HTMLParser import HTMLParser
+from html.parser import HTMLParser
 # https://github.com/jcsaaddupuy/python-kodijson
 from kodijson import Kodi
 
@@ -38,7 +38,7 @@ def findVideoFilesForVideoID(video_id, downloadDir = None, expect1 = False):
     assert len(foundFiles) <= 1, '\nERROR: found more than one video match for video_id "%s"' % video_id
     if len(foundFiles) == 1: return foundFiles[0]
     if expect1:
-        print('\n' + foundFiles)
+        print(('\n' + foundFiles))
         sys.exit('ERROR: we expected to find one file here and found none for video_id %s' % video_id)
     return False
 
@@ -50,14 +50,14 @@ def findNFOFilesForVideoID(video_id, downloadDir = None, expect1 = False):
     assert len(foundFiles) <= 1, '\nERROR: found more than one NFO match for video_id "%s"' % video_id
     if len(foundFiles) == 1: return foundFiles[0]
     if expect1:
-        print('\n' + foundFiles)
+        print(('\n' + foundFiles))
         sys.exit('ERROR: we expected to find one file here and found none for video_id %s' % video_id)
     return False
 
 if __name__ == '__main__':
 
     savepath = os.path.expanduser('~/.twl_downloader_settings.cfg')
-    config = ConfigParser.RawConfigParser()
+    config = configparser.RawConfigParser()
     config.read(savepath)
 
     apiKey           = config.get('twl_downloader_settings', 'apiKey')
@@ -66,28 +66,28 @@ if __name__ == '__main__':
 
     # Options added later with auto-set defaults
     try: writenfofiles = config.getboolean('twl_downloader_settings', 'writenfofiles')
-    except ConfigParser.NoOptionError: writenfofiles = False
+    except configparser.NoOptionError: writenfofiles = False
 
     try: kodihostname = config.get('twl_downloader_settings', 'kodihostname')
-    except ConfigParser.NoOptionError: kodihostname = None
+    except configparser.NoOptionError: kodihostname = None
 
     try: kodiport = config.get('twl_downloader_settings', 'kodiport')
-    except ConfigParser.NoOptionError: kodiport = None
+    except configparser.NoOptionError: kodiport = None
 
     try: kodiuser = config.get('twl_downloader_settings', 'kodiuser')
-    except ConfigParser.NoOptionError: kodiuser = None
+    except configparser.NoOptionError: kodiuser = None
 
     try: kodipassword = config.get('twl_downloader_settings', 'kodipassword')
-    except ConfigParser.NoOptionError: kodipassword = None
+    except configparser.NoOptionError: kodipassword = None
 
     try: downloadtotmp = config.getboolean('twl_downloader_settings', 'downloadtotmp')
-    except ConfigParser.NoOptionError: downloadtotmp = True
+    except configparser.NoOptionError: downloadtotmp = True
 
     # get all the data from the last few days:
     refreshTimeString = '-28days' #alternate relative English string will be parsed by PHP on the server side
 
     # Set up a new config file
-    config = ConfigParser.RawConfigParser()
+    config = configparser.RawConfigParser()
     config.add_section('twl_downloader_settings')
     config.set('twl_downloader_settings', 'apiKey',           apiKey)
     config.set('twl_downloader_settings', 'pathtoyoutubedl',  pathtoyoutubedl)
@@ -122,13 +122,13 @@ if __name__ == '__main__':
     elif downloadlocation:
         os.chdir(downloadlocation)
 
-    print("Syncing ToWatchList with '%s'" % os.getcwd())
-    print("Found %i videos to try downloading." % len(myMarks))
+    print(("Syncing ToWatchList with '%s'" % os.getcwd()))
+    print(("Found %i videos to try downloading." % len(myMarks)))
     print("---------------------------------")
 
     shouldCleanKodi = shouldScanKodi = False
 
-    for i in xrange(len(myMarks)):
+    for i in range(len(myMarks)):
         # set some values we'll use below
         videoURL      = myMarks[i]['Mark']['source_url']
         # thumbURL      = myMarks[i]['Mark']['thumb_url'].replace('/default.jpg', '/maxresdefault.jpg').replace('_120x90.jpg', '_1280x720.jpg')
@@ -145,16 +145,16 @@ if __name__ == '__main__':
             # it's been marked as watched, delete the local copy
             for filename in glob.glob( os.path.join( downloadlocation, '*-%s.*' % video_id )):
                 os.remove(filename)
-                print("Removed watched or deleted videos & NFOs: '%s'" % filename).encode('utf-8')
+                print(("Removed watched or deleted videos & NFOs: '%s'" % filename).encode('utf-8'))
                 shouldCleanKodi = True
             continue
         else:
             # if the file already exists
             if findVideoFilesForVideoID(video_id, downloadDir = downloadlocation):
-                print("Already downloaded: '%s'" % title).encode('utf-8')
+                print(("Already downloaded: '%s'" % title).encode('utf-8'))
             else:
                 # if it hasn't been downloaded or marked watched, try to download it now
-                print("Downlading %s from %s" % (title, videoURL) ).encode('utf-8')
+                print(("Downlading %s from %s" % (title, videoURL) ).encode('utf-8'))
                 # youtube-dl does a good job of getting you the best quality video, but these are some tweaks that helped get my perefered format
                 # the -f argument limits things to 1080p (ie no 4K video when possible) and also prefer AVC video when possible (AVC has wide support)
                 # --merge-output-format FORMAT (perefers mkv as it's flexible & widely supported in Kodi & others)
@@ -169,7 +169,7 @@ if __name__ == '__main__':
 
                 if downloadtotmp: # now move files into place
                     foundVideoFile = findVideoFilesForVideoID(video_id, expect1=True)
-                    print("Move %s to %s" % (foundVideoFile, downloadlocation))
+                    print(("Move %s to %s" % (foundVideoFile, downloadlocation)))
                     shutil.move(foundVideoFile, downloadlocation)
 
             if writenfofiles:
@@ -206,13 +206,13 @@ if __name__ == '__main__':
         if shouldScanKodi or shouldCleanKodi:
             kodi.GUI.ShowNotification({"title":"ToWatchList Downloader", "message":"New videos downloaded, update Kodi library…"})
         if shouldScanKodi:
-            print("Scanning Kodi Library (@ %s)" % kodihostname)
+            print(("Scanning Kodi Library (@ %s)" % kodihostname))
             kodi.VideoLibrary.Scan()
         if shouldCleanKodi:
-            print("Cleaning Kodi Library (@ %s)" % kodihostname)
+            print(("Cleaning Kodi Library (@ %s)" % kodihostname))
             kodi.VideoLibrary.Clean()
         if not shouldCleanKodi and not shouldScanKodi:
-            print("No Scan or Clean of Kodi (@ %s) needed" % kodihostname)
+            print(("No Scan or Clean of Kodi (@ %s) needed" % kodihostname))
 
 # Info/formatting for NFO example
 # <episodedetails>
