@@ -5,7 +5,7 @@ IMAGE_NAME := towatchlist-downloader
 ENV_FILE := .env
 
 # Phony targets
-.PHONY: all build run run-local test lint help
+.PHONY: all build run run-local test lint format help
 
 # Default target
 all: help
@@ -34,6 +34,7 @@ run-local:
 		echo "ERROR: .env file not found. Please create one from .env.example."; \
 		exit 1; \
 	fi
+	@uv pip install --system -r requirements.txt > /dev/null
 	@set -a && . $(ENV_FILE) && set +a && \
 	python3 twl_downloader.py
 
@@ -43,11 +44,17 @@ test:
 	@uv pip install --system -r requirements.txt -r requirements-dev.txt > /dev/null
 	@PYTHONPATH=. pytest
 
-# Lint the code
+# Lint the code using ruff
 lint:
 	@echo "Linting code..."
 	@uv pip install --system -r requirements-dev.txt > /dev/null
-	@flake8 twl_downloader.py test_twl_downloader.py
+	@uvx ruff check .
+
+# Format the code using ruff
+format:
+	@echo "Formatting code..."
+	@uv pip install --system -r requirements-dev.txt > /dev/null
+	@uvx ruff format .
 
 # Help target
 help:
@@ -56,4 +63,5 @@ help:
 	@echo "  run        - Run the application in a Docker container"
 	@echo "  run-local  - Run the application locally"
 	@echo "  test       - Run the test suite"
-	@echo "  lint       - Lint the Python code"
+	@echo "  lint       - Check code for style issues and errors"
+	@echo "  format     - Automatically format the code"
