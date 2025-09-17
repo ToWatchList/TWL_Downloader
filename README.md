@@ -4,60 +4,79 @@ ToWatchList Downloader or `twl_downloader` is a Python script to automate downlo
 
 This project is designed to be run as a Docker container. It syncs your local video library with your ToWatchList account, downloading new videos and removing ones that have been marked as watched or deleted.
 
-## Requirements
-
-- A [ToWatchList.com](https://towatchlist.com) account.
-- [Docker](https://www.docker.com/) installed on your system.
-
 ## Getting Started
 
-The script is configured via environment variables. You will need to provide your ToWatchList API key. The other variables are optional.
+This project uses a `Makefile` to simplify common tasks like building and running the application.
 
-### Building the Docker Image
+### 1. Create a Configuration File
 
-To build the Docker image, run the following command in the project directory:
-
-```bash
-docker build -t towatchlist-downloader .
-```
-
-### Running the Container
-
-To run the container, you need to provide your API key and mount volumes for your downloads and for the application's configuration cache.
-
-Here is an example `docker run` command:
+First, copy the example environment file and fill in your details:
 
 ```bash
-docker run --rm \
-  -e TWL_API_KEY="your_api_key_here" \
-  -v /path/to/your/videos:/downloads \
-  -v /path/to/your/appdata/twl-dl:/config \
-  --name towatchlist-downloader \
-  towatchlist-downloader
+cp .env.example .env
 ```
 
-- `--rm`: Automatically removes the container when it exits.
-- `-e TWL_API_KEY`: Sets your ToWatchList API key. **This is required.**
-- `-v /path/to/your/videos:/downloads`: Mounts a local directory to store the downloaded videos.
-- `-v /path/to/your/appdata/twl-dl:/config`: Mounts a local directory to store configuration and cache for `yt-dlp`. This helps to avoid re-downloading `yt-dlp` on every run. The user from the original request mentioned using `/exos/docker-data/config/appdata/twl-dl` for this path.
-- `--name towatchlist-downloader`: Assigns a name to the container.
+Now, edit the `.env` file to add your `TWL_API_KEY`.
+
+### 2. Build and Run with Docker
+
+You can build and run the application using the following `make` commands:
+
+```bash
+# Build the Docker image
+make build
+
+# Run the application in a container
+make run
+```
+
+The `make run` command will mount the `./videos` directory for downloads and the `./config` directory for caching `yt-dlp` updates.
 
 It is recommended to run this container on a schedule using a tool like `cron`.
 
 ### Environment Variables
 
-The following environment variables are available for configuration:
+The application is configured via environment variables, which are loaded from the `.env` file by the `Makefile`.
 
 | Variable              | Description                                                                 | Default                  |
 | --------------------- | --------------------------------------------------------------------------- | ------------------------ |
 | `TWL_API_KEY`         | **Required.** Your ToWatchList.com API key.                                 | (none)                   |
-| `TWL_DOWNLOAD_LOCATION`| The directory inside the container to save videos to.                       | `/downloads`             |
+| `TWL_DOWNLOAD_LOCATION`| The directory to save videos to.                                            | `./videos`               |
 | `TWL_WRITE_NFO_FILES` | Set to `true` to generate `.nfo` metadata files for Kodi.                   | `false`                  |
 | `TWL_DOWNLOAD_TO_TMP` | Set to `true` to download to a temporary location before moving.            | `true`                   |
 | `TWL_KODI_HOSTNAME`   | The hostname or IP address of your Kodi instance.                           | (none)                   |
 | `TWL_KODI_PORT`       | The port for Kodi's web interface.                                          | `8080`                   |
 | `TWL_KODI_USER`       | The username for Kodi's web interface.                                      | (none)                   |
 | `TWL_KODI_PASSWORD`   | The password for Kodi's web interface.                                      | (none)                   |
+
+
+## Development
+
+### Running Locally
+
+To run the script outside of Docker for development purposes:
+
+```bash
+make run-local
+```
+
+This requires Python 3 and the dependencies from `requirements.txt`.
+
+### Running Tests
+
+The project includes a test suite using `pytest`. To run the tests:
+
+```bash
+make test
+```
+
+### Linting
+
+To check the code for style issues, run the linter:
+
+```bash
+make lint
+```
 
 ## How it Works
 

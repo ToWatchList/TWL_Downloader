@@ -13,22 +13,28 @@ import shutil
 from html.parser import HTMLParser
 from kodijson import Kodi
 
+
 class MLStripper(HTMLParser):
     """A simple HTML parser to strip tags from a string."""
+
     def __init__(self):
         super().__init__()
         self.reset()
         self.fed = []
+
     def handle_data(self, d):
         self.fed.append(d)
+
     def get_data(self):
         return ''.join(self.fed)
+
 
 def strip_tags(html):
     """Strips HTML tags from a string."""
     s = MLStripper()
     s.feed(html)
     return s.get_data()
+
 
 def get_config():
     """Reads configuration from environment variables."""
@@ -46,10 +52,12 @@ def get_config():
         sys.exit("ERROR: TWL_API_KEY environment variable not set.")
     return config
 
+
 def get_all_files_for_video_id(video_id, download_dir):
     """Finds all files (video, thumbnail, subs, etc.) for a given video_id."""
     pattern = os.path.join(download_dir, f'*-{video_id}.*')
     return glob.glob(pattern)
+
 
 def find_video_file_for_id(video_id, download_dir):
     """Finds the main video file for a given video_id."""
@@ -76,6 +84,7 @@ def get_videos_from_api(api_key):
     except ValueError:
         sys.exit("ERROR: Failed to parse JSON response from ToWatchList API.")
 
+
 def download_video(video_info, config):
     """Downloads a single video using yt-dlp."""
     title = video_info['Mark']['title']
@@ -86,8 +95,10 @@ def download_video(video_info, config):
 
     output_path = '/tmp' if config['download_to_tmp'] else config['download_location']
     # Ensure filename is sanitized and doesn't contain path traversal characters
-    safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    output_template = os.path.join(output_path, f'{safe_title}-{video_id}.%(ext)s')
+    safe_title = "".join(c for c in title if c.isalnum()
+                         or c in (' ', '-', '_')).rstrip()
+    output_template = os.path.join(
+        output_path, f'{safe_title}-{video_id}.%(ext)s')
 
     ydl_opts = {
         'format': 'bestvideo[height<=1080][vcodec*=avc]+bestaudio/best',
@@ -111,10 +122,12 @@ def download_video(video_info, config):
         downloaded_files = get_all_files_for_video_id(video_id, '/tmp')
         for f in downloaded_files:
             try:
-                print(f"Moving {os.path.basename(f)} to {config['download_location']}")
+                print(
+                    f"Moving {os.path.basename(f)} to {config['download_location']}")
                 shutil.move(f, config['download_location'])
             except shutil.Error as e:
-                print(f"WARN: Could not move file {f}. It may already exist. Details: {e}")
+                print(
+                    f"WARN: Could not move file {f}. It may already exist. Details: {e}")
 
 
 def create_nfo_file(video_info, config):
@@ -122,7 +135,8 @@ def create_nfo_file(video_info, config):
     video_id = video_info['Mark']['video_id']
     video_file = find_video_file_for_id(video_id, config['download_location'])
     if not video_file:
-        print(f"WARNING: Video file for '{video_id}' not found. Cannot create NFO file.")
+        print(
+            f"WARNING: Video file for '{video_id}' not found. Cannot create NFO file.")
         return
 
     nfo_file_path = os.path.splitext(video_file)[0] + '.nfo'
@@ -134,10 +148,12 @@ def create_nfo_file(video_info, config):
     thumb_url = ''
     try:
         with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
-            info_dict = ydl.extract_info(video_info['Mark']['source_url'], download=False)
+            info_dict = ydl.extract_info(
+                video_info['Mark']['source_url'], download=False)
             thumb_url = info_dict.get('thumbnail', '')
     except Exception as e:
-        print(f"WARNING: Could not fetch thumbnail for {video_info['Mark']['title']}. Reason: {e}")
+        print(
+            f"WARNING: Could not fetch thumbnail for {video_info['Mark']['title']}. Reason: {e}")
 
     nfo_content = f"""
 <episodedetails>
@@ -153,15 +169,18 @@ def create_nfo_file(video_info, config):
     with open(nfo_file_path, "w", encoding="utf-8") as nfo_file:
         nfo_file.write(nfo_content)
 
+
 def remove_watched_video(video_id, config):
     """Removes local files for a watched or deleted video."""
-    files_to_remove = get_all_files_for_video_id(video_id, config['download_location'])
+    files_to_remove = get_all_files_for_video_id(
+        video_id, config['download_location'])
     for f in files_to_remove:
         try:
             os.remove(f)
             print(f"Removed watched/deleted file: {os.path.basename(f)}")
         except OSError as e:
             print(f"ERROR: Could not remove file {f}. Reason: {e}")
+
 
 def notify_kodi(config, scan=False, clean=False):
     """Sends notifications to Kodi to scan or clean the library."""
@@ -170,13 +189,15 @@ def notify_kodi(config, scan=False, clean=False):
 
     print(f"Contacting Kodi at {config['kodi_hostname']}...")
     try:
-        kodi = Kodi(f"http://{config['kodi_hostname']}:{config['kodi_port']}/jsonrpc", config['kodi_user'], config['kodi_password'])
+        kodi = Kodi(f"http://{config['kodi_hostname']}:{config['kodi_port']}/jsonrpc",
+                    config['kodi_user'], config['kodi_password'])
         if kodi.JSONRPC.Ping()['result'] != 'pong':
             print("ERROR: Bad response from Kodi.")
             return
 
         if scan or clean:
-            kodi.GUI.ShowNotification({"title": "ToWatchList Downloader", "message": "Updating Kodi library..."})
+            kodi.GUI.ShowNotification(
+                {"title": "ToWatchList Downloader", "message": "Updating Kodi library..."})
         if scan:
             print("Scanning Kodi video library...")
             kodi.VideoLibrary.Scan()
@@ -207,7 +228,7 @@ def main():
     should_scan_kodi = False
     should_clean_kodi = False
 
-    for video__info in videos:
+    for video_info in videos:
         mark = video_info['Mark']
         video_id = mark['video_id']
 
@@ -216,7 +237,8 @@ def main():
             should_clean_kodi = True
             continue
 
-        video_file = find_video_file_for_id(video_id, config['download_location'])
+        video_file = find_video_file_for_id(
+            video_id, config['download_location'])
         if video_file:
             print(f"Already downloaded: '{mark['title']}'")
         else:
@@ -230,6 +252,7 @@ def main():
 
     notify_kodi(config, scan=should_scan_kodi, clean=should_clean_kodi)
     print("Sync complete.")
+
 
 if __name__ == '__main__':
     main()

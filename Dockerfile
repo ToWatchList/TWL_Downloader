@@ -1,12 +1,15 @@
-# Use a lightweight Python base image
-FROM python:3.9-slim
+# Use a lightweight Python 3.12 base image
+FROM python:3.12-slim
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
+# Install uv, a fast Python package installer
+RUN pip install uv
+
+# Copy the requirements file and install dependencies using uv
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --no-cache -r requirements.txt
 
 # Copy the application script and entrypoint
 COPY twl_downloader.py .
