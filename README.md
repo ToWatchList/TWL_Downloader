@@ -1,35 +1,74 @@
-ToWatchList Downloader
-======================
-ToWatchList Downloader or `twl_downloader.py` is Python script to automate downloading videos from [ToWatchList.com](https://towatchlist.com)
+# ToWatchList Downloader
 
-Requirements
-------------
-- [ToWatchList.com](https://towatchlist.com) account
-- Python 2.7 or later - The scripts have been tested on Python 2.7.3 on Linux, and 2.7.5 on Mac.
-- [youtube-dl](http://rg3.github.io/youtube-dl/) - Must be the latest version
+ToWatchList Downloader or `twl_downloader` is a Python script to automate downloading videos from [ToWatchList.com](https://towatchlist.com) using yt-dlp.
 
-Getting Started
----------------
-After installing [youtube-dl](http://rg3.github.io/youtube-dl/), run the `setup.py` script.  It will walk though saving your API key and other options.
+This project is designed to be run as a Docker container. It syncs your local video library with your ToWatchList account, downloading new videos and removing ones that have been marked as watched or deleted.
 
-Once you're happy with the setup options. Try running `twl_downloader.py` to make sure it works. It should download any videos that were added to your ToWatchList in the last 10 days the first time it is run (after that it only downloads changes since the last execution time).
+## Requirements
 
-After you get the script running well when manually invoked. It's recommended you set up a cron job (or similar tool) to start `twl_downloader.py` regularly.  This keeps your local videos up to date with your ToWatchList since the script will also delete local videos you've marked as watched on the website or app.
+- A [ToWatchList.com](https://towatchlist.com) account.
+- [Docker](https://www.docker.com/) installed on your system.
 
-Tips & Suggestions
-------------------
-It's important to keep [youtube-dl](http://rg3.github.io/youtube-dl/) updated regularly because it can break if YouTube or Vimeo change things around.  In my experience this hasn't been a frequent problem but when it occurred [youtube-dl](http://rg3.github.io/youtube-dl/) was updated rapidly to fix any issues.  So I suggest using [HomeBrew](http://brew.sh) (on the Mac) or just [youtube-dl's self updater](https://github.com/rg3/youtube-dl/blob/master/README.md#options) (with the `-U` CLI option) to to keep things up to date. You probably want to put the update command into a cron job of it's own.
+## Getting Started
 
-On a related note, it's really great to point a TV interface like [Kodi](http://kodi.tv) (formally XBMC) at your download folder. The script can even write out appropreate metadata for thumbnails and descriptions for Kodi. This allows you to browse & watch all your to watch videos locally with no buffering or ads.  This is actually the original intent the script.
+The script is configured via environment variables. You will need to provide your ToWatchList API key. The other variables are optional.
 
-Disclaimers & Other Info
---------------------------
-These scripts use some of the private APIs from ToWatchList, which may change at any time. This includes:
+### Building the Docker Image
 
-1.  Minor adjustments to syntax and data in provided by the API (this shouldn't affect these scripts)
-2.  Bandwidth & polling limits to prevent abuse (this shouldn't affect normal use)
-3.  The full data API may require a small monthly or yearly fee as part of subscription to ToWatchList's 'Pro' features
+To build the Docker image, run the following command in the project directory:
 
-That said, I'm the the developer of ToWatchList and use these scripts every day.  So I plan to keep them updated if anything changes that would break them.
+```bash
+docker build -t towatchlist-downloader .
+```
 
-Please see the [ToWatchList API Page](http://towatchlist.com/api) for more API details and [contact me](http://towatchlist.com/pages/contact) with any questions.
+### Running the Container
+
+To run the container, you need to provide your API key and mount volumes for your downloads and for the application's configuration cache.
+
+Here is an example `docker run` command:
+
+```bash
+docker run --rm \
+  -e TWL_API_KEY="your_api_key_here" \
+  -v /path/to/your/videos:/downloads \
+  -v /path/to/your/appdata/twl-dl:/config \
+  --name towatchlist-downloader \
+  towatchlist-downloader
+```
+
+- `--rm`: Automatically removes the container when it exits.
+- `-e TWL_API_KEY`: Sets your ToWatchList API key. **This is required.**
+- `-v /path/to/your/videos:/downloads`: Mounts a local directory to store the downloaded videos.
+- `-v /path/to/your/appdata/twl-dl:/config`: Mounts a local directory to store configuration and cache for `yt-dlp`. This helps to avoid re-downloading `yt-dlp` on every run. The user from the original request mentioned using `/exos/docker-data/config/appdata/twl-dl` for this path.
+- `--name towatchlist-downloader`: Assigns a name to the container.
+
+It is recommended to run this container on a schedule using a tool like `cron`.
+
+### Environment Variables
+
+The following environment variables are available for configuration:
+
+| Variable              | Description                                                                 | Default                  |
+| --------------------- | --------------------------------------------------------------------------- | ------------------------ |
+| `TWL_API_KEY`         | **Required.** Your ToWatchList.com API key.                                 | (none)                   |
+| `TWL_DOWNLOAD_LOCATION`| The directory inside the container to save videos to.                       | `/downloads`             |
+| `TWL_WRITE_NFO_FILES` | Set to `true` to generate `.nfo` metadata files for Kodi.                   | `false`                  |
+| `TWL_DOWNLOAD_TO_TMP` | Set to `true` to download to a temporary location before moving.            | `true`                   |
+| `TWL_KODI_HOSTNAME`   | The hostname or IP address of your Kodi instance.                           | (none)                   |
+| `TWL_KODI_PORT`       | The port for Kodi's web interface.                                          | `8080`                   |
+| `TWL_KODI_USER`       | The username for Kodi's web interface.                                      | (none)                   |
+| `TWL_KODI_PASSWORD`   | The password for Kodi's web interface.                                      | (none)                   |
+
+## How it Works
+
+The container's entrypoint script first updates `yt-dlp` to the latest version, using the `/config` volume to cache the package. Then, it runs the main Python script which:
+1. Fetches the latest unwatched videos from your ToWatchList account via the API.
+2. Downloads any new videos using `yt-dlp`.
+3. Deletes any local video files that have been marked as watched or deleted on ToWatchList.
+4. Optionally, creates `.nfo` files for metadata.
+5. Optionally, sends a notification to a Kodi instance to scan or clean the library.
+
+## Disclaimers
+
+This script uses the private APIs from ToWatchList, which may change at any time. The original developer of this script is also the developer of ToWatchList and intended to keep it updated.
+Please see the [ToWatchList API Page](http://towatchlist.com/api) for more API details.

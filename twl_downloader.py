@@ -1,22 +1,22 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding=utf-8
-# this script downloads a users latest ToWatchList unwatched videos using youtube-dl
-# youtube-dl is available here: http://rg3.github.io/youtube-dl/
+"""
+This script downloads a user's latest ToWatchList unwatched videos using yt-dlp.
+"""
 
-import sys, os, shutil
-reload(sys)
-sys.setdefaultencoding('utf8') # this is a trick to get everything in utf-8, had trouble with funky chars from YouTube without it
-import subprocess, os, glob, configparser, requests, shlex
-# import youtube_dl # TODO: in future do youtube_dl without needing to CLI with subprocess, for now it's more portable as a seperate install
-from datetime import datetime
+import os
+import sys
+import glob
+import requests
+import yt_dlp
+import shutil
 from html.parser import HTMLParser
-# https://github.com/jcsaaddupuy/python-kodijson
 from kodijson import Kodi
 
-# to strip HTML tags via:
-# http://stackoverflow.com/a/925630/1304462
 class MLStripper(HTMLParser):
+    """A simple HTML parser to strip tags from a string."""
     def __init__(self):
+        super().__init__()
         self.reset()
         self.fed = []
     def handle_data(self, d):
@@ -25,210 +25,211 @@ class MLStripper(HTMLParser):
         return ''.join(self.fed)
 
 def strip_tags(html):
+    """Strips HTML tags from a string."""
     s = MLStripper()
     s.feed(html)
     return s.get_data()
 
-def findVideoFilesForVideoID(video_id, downloadDir = None, expect1 = False):
-    # searching for filenames ending in mkv, mov, mp4, & ebm
-    if downloadDir and os.path.isdir(downloadDir):
-        foundFiles = glob.glob(os.path.join( downloadDir, '*-%s*[em][pkbo][4vm]' % video_id) )
-    else:
-        foundFiles = glob.glob('*-%s*[em][pkbo][4vm]' % video_id)
-    assert len(foundFiles) <= 1, '\nERROR: found more than one video match for video_id "%s"' % video_id
-    if len(foundFiles) == 1: return foundFiles[0]
-    if expect1:
-        print(('\n' + foundFiles))
-        sys.exit('ERROR: we expected to find one file here and found none for video_id %s' % video_id)
-    return False
+def get_config():
+    """Reads configuration from environment variables."""
+    config = {
+        'api_key': os.getenv('TWL_API_KEY'),
+        'download_location': os.getenv('TWL_DOWNLOAD_LOCATION', '/downloads'),
+        'write_nfo_files': os.getenv('TWL_WRITE_NFO_FILES', 'false').lower() in ('true', '1', 't'),
+        'kodi_hostname': os.getenv('TWL_KODI_HOSTNAME'),
+        'kodi_port': int(os.getenv('TWL_KODI_PORT', '8080')),
+        'kodi_user': os.getenv('TWL_KODI_USER'),
+        'kodi_password': os.getenv('TWL_KODI_PASSWORD'),
+        'download_to_tmp': os.getenv('TWL_DOWNLOAD_TO_TMP', 'true').lower() in ('true', '1', 't'),
+    }
+    if not config['api_key']:
+        sys.exit("ERROR: TWL_API_KEY environment variable not set.")
+    return config
 
-def findNFOFilesForVideoID(video_id, downloadDir = None, expect1 = False):
-    if downloadDir and os.path.isdir(downloadDir):
-        foundFiles = glob.glob(os.path.join( downloadDir, '*-%s*nfo' % video_id) )
-    else:
-        foundFiles = glob.glob( '*-%s*nfo' % video_id )
-    assert len(foundFiles) <= 1, '\nERROR: found more than one NFO match for video_id "%s"' % video_id
-    if len(foundFiles) == 1: return foundFiles[0]
-    if expect1:
-        print(('\n' + foundFiles))
-        sys.exit('ERROR: we expected to find one file here and found none for video_id %s' % video_id)
-    return False
+def get_all_files_for_video_id(video_id, download_dir):
+    """Finds all files (video, thumbnail, subs, etc.) for a given video_id."""
+    pattern = os.path.join(download_dir, f'*-{video_id}.*')
+    return glob.glob(pattern)
 
-if __name__ == '__main__':
+def find_video_file_for_id(video_id, download_dir):
+    """Finds the main video file for a given video_id."""
+    # Common video extensions that yt-dlp might output.
+    video_extensions = ['mp4', 'mkv', 'webm', 'mov', 'flv', 'avi']
+    for ext in video_extensions:
+        files = glob.glob(os.path.join(download_dir, f'*-{video_id}.{ext}'))
+        if files:
+            return files[0]
+    # Fallback if the extension is not in our list
+    all_files = get_all_files_for_video_id(video_id, download_dir)
+    return all_files[0] if all_files else None
 
-    savepath = os.path.expanduser('~/.twl_downloader_settings.cfg')
-    config = configparser.RawConfigParser()
-    config.read(savepath)
 
-    apiKey           = config.get('twl_downloader_settings', 'apiKey')
-    pathtoyoutubedl  = config.get('twl_downloader_settings', 'pathtoyoutubedl')
-    downloadlocation = config.get('twl_downloader_settings', 'downloadlocation')
+def get_videos_from_api(api_key):
+    """Fetches the list of videos from the ToWatchList API."""
+    api_url = f"https://towatchlist.com/api/v1/marks?since=-28days&uid={api_key}"
+    try:
+        response = requests.get(api_url)
+        response.raise_for_status()
+        return response.json().get('marks', [])
+    except requests.exceptions.RequestException as e:
+        sys.exit(f"ERROR: Failed to fetch data from ToWatchList API: {e}")
+    except ValueError:
+        sys.exit("ERROR: Failed to parse JSON response from ToWatchList API.")
 
-    # Options added later with auto-set defaults
-    try: writenfofiles = config.getboolean('twl_downloader_settings', 'writenfofiles')
-    except configparser.NoOptionError: writenfofiles = False
+def download_video(video_info, config):
+    """Downloads a single video using yt-dlp."""
+    title = video_info['Mark']['title']
+    video_url = video_info['Mark']['source_url']
+    video_id = video_info['Mark']['video_id']
 
-    try: kodihostname = config.get('twl_downloader_settings', 'kodihostname')
-    except configparser.NoOptionError: kodihostname = None
+    print(f"Downloading: '{title}' ({video_url})")
 
-    try: kodiport = config.get('twl_downloader_settings', 'kodiport')
-    except configparser.NoOptionError: kodiport = None
+    output_path = '/tmp' if config['download_to_tmp'] else config['download_location']
+    # Ensure filename is sanitized and doesn't contain path traversal characters
+    safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    output_template = os.path.join(output_path, f'{safe_title}-{video_id}.%(ext)s')
 
-    try: kodiuser = config.get('twl_downloader_settings', 'kodiuser')
-    except configparser.NoOptionError: kodiuser = None
+    ydl_opts = {
+        'format': 'bestvideo[height<=1080][vcodec*=avc]+bestaudio/best',
+        'merge_output_format': 'mp4',
+        'outtmpl': output_template,
+        'writethumbnail': True,
+        'writesubtitles': True,
+        'embedsubtitles': True,
+        'addmetadata': True,
+        'quiet': True,
+    }
 
-    try: kodipassword = config.get('twl_downloader_settings', 'kodipassword')
-    except configparser.NoOptionError: kodipassword = None
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+    except Exception as e:
+        print(f"ERROR: Failed to download '{title}'. Reason: {e}")
+        return
 
-    try: downloadtotmp = config.getboolean('twl_downloader_settings', 'downloadtotmp')
-    except configparser.NoOptionError: downloadtotmp = True
+    if config['download_to_tmp']:
+        downloaded_files = get_all_files_for_video_id(video_id, '/tmp')
+        for f in downloaded_files:
+            try:
+                print(f"Moving {os.path.basename(f)} to {config['download_location']}")
+                shutil.move(f, config['download_location'])
+            except shutil.Error as e:
+                print(f"WARN: Could not move file {f}. It may already exist. Details: {e}")
 
-    # get all the data from the last few days:
-    refreshTimeString = '-28days' #alternate relative English string will be parsed by PHP on the server side
 
-    # Set up a new config file
-    config = configparser.RawConfigParser()
-    config.add_section('twl_downloader_settings')
-    config.set('twl_downloader_settings', 'apiKey',           apiKey)
-    config.set('twl_downloader_settings', 'pathtoyoutubedl',  pathtoyoutubedl)
-    config.set('twl_downloader_settings', 'downloadlocation', downloadlocation)
-    config.set('twl_downloader_settings', 'writenfofiles',    writenfofiles)
-    config.set('twl_downloader_settings', 'kodihostname',     kodihostname)
-    config.set('twl_downloader_settings', 'kodiport',         kodiport)
-    config.set('twl_downloader_settings', 'kodiuser',         kodiuser)
-    config.set('twl_downloader_settings', 'kodipassword',     kodipassword)
-    config.set('twl_downloader_settings', 'downloadtotmp',    downloadtotmp)
+def create_nfo_file(video_info, config):
+    """Creates an NFO file for Kodi."""
+    video_id = video_info['Mark']['video_id']
+    video_file = find_video_file_for_id(video_id, config['download_location'])
+    if not video_file:
+        print(f"WARNING: Video file for '{video_id}' not found. Cannot create NFO file.")
+        return
 
-    # fix 'None' string -> None
-    if apiKey           == 'None': apiKey           = None
-    if pathtoyoutubedl  == 'None': pathtoyoutubedl  = None
-    if downloadlocation == 'None': downloadlocation = None
-    if kodihostname     == 'None': kodihostname     = None
-    if kodiport         == 'None': kodiport         = None
-    if kodiuser         == 'None': kodiuser         = None
-    if kodipassword     == 'None': kodipassword     = None
+    nfo_file_path = os.path.splitext(video_file)[0] + '.nfo'
+    if os.path.exists(nfo_file_path):
+        return
 
-    # Writing our config file
-    with open(savepath, 'wb') as configfile:
-        config.write(configfile)
+    print(f"Creating NFO file for: {video_info['Mark']['title']}")
 
-    # get updated marks from the server
-    r = requests.get( "https://towatchlist.com/api/v1/marks?since=%s&uid=%s" % (refreshTimeString, apiKey) )
-    myMarks = r.json()['marks']
+    thumb_url = ''
+    try:
+        with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
+            info_dict = ydl.extract_info(video_info['Mark']['source_url'], download=False)
+            thumb_url = info_dict.get('thumbnail', '')
+    except Exception as e:
+        print(f"WARNING: Could not fetch thumbnail for {video_info['Mark']['title']}. Reason: {e}")
 
-    # change directory to download location
-    if downloadtotmp:
-        os.chdir('/tmp')
-    elif downloadlocation:
-        os.chdir(downloadlocation)
+    nfo_content = f"""
+<episodedetails>
+  <title>{video_info['Mark']['title']}</title>
+  <showtitle>{video_info['Mark']['channel_title']}</showtitle>
+  <aired>{video_info['Mark']['created']}</aired>
+  <plot>{strip_tags(video_info['Mark'].get('comment', ''))}</plot>
+  <runtime>{round(int(video_info['Mark']['duration']) / 60.0)}</runtime>
+  <thumb>{thumb_url}</thumb>
+  <videourl>{video_info['Mark']['source_url']}</videourl>
+</episodedetails>
+"""
+    with open(nfo_file_path, "w", encoding="utf-8") as nfo_file:
+        nfo_file.write(nfo_content)
 
-    print(("Syncing ToWatchList with '%s'" % os.getcwd()))
-    print(("Found %i videos to try downloading." % len(myMarks)))
+def remove_watched_video(video_id, config):
+    """Removes local files for a watched or deleted video."""
+    files_to_remove = get_all_files_for_video_id(video_id, config['download_location'])
+    for f in files_to_remove:
+        try:
+            os.remove(f)
+            print(f"Removed watched/deleted file: {os.path.basename(f)}")
+        except OSError as e:
+            print(f"ERROR: Could not remove file {f}. Reason: {e}")
+
+def notify_kodi(config, scan=False, clean=False):
+    """Sends notifications to Kodi to scan or clean the library."""
+    if not config['kodi_hostname']:
+        return
+
+    print(f"Contacting Kodi at {config['kodi_hostname']}...")
+    try:
+        kodi = Kodi(f"http://{config['kodi_hostname']}:{config['kodi_port']}/jsonrpc", config['kodi_user'], config['kodi_password'])
+        if kodi.JSONRPC.Ping()['result'] != 'pong':
+            print("ERROR: Bad response from Kodi.")
+            return
+
+        if scan or clean:
+            kodi.GUI.ShowNotification({"title": "ToWatchList Downloader", "message": "Updating Kodi library..."})
+        if scan:
+            print("Scanning Kodi video library...")
+            kodi.VideoLibrary.Scan()
+        if clean:
+            print("Cleaning Kodi video library...")
+            kodi.VideoLibrary.Clean()
+        if not scan and not clean:
+            print("No Scan or Clean of Kodi needed.")
+
+    except Exception as e:
+        print(f"ERROR: Could not connect to Kodi. Reason: {e}")
+
+
+def main():
+    """Main function to run the sync process."""
+    config = get_config()
+
+    os.makedirs(config['download_location'], exist_ok=True)
+    if config['download_to_tmp']:
+        os.makedirs('/tmp', exist_ok=True)
+
+    videos = get_videos_from_api(config['api_key'])
+
+    print(f"Syncing ToWatchList with '{config['download_location']}'")
+    print(f"Found {len(videos)} videos to process.")
     print("---------------------------------")
 
-    shouldCleanKodi = shouldScanKodi = False
+    should_scan_kodi = False
+    should_clean_kodi = False
 
-    for i in range(len(myMarks)):
-        # set some values we'll use below
-        videoURL      = myMarks[i]['Mark']['source_url']
-        # thumbURL      = myMarks[i]['Mark']['thumb_url'].replace('/default.jpg', '/maxresdefault.jpg').replace('_120x90.jpg', '_1280x720.jpg')
-        title         = myMarks[i]['Mark']['title']
-        video_id      = myMarks[i]['Mark']['video_id']
-        channel_title = myMarks[i]['Mark']['channel_title']
-        duration      = int(myMarks[i]['Mark']['duration']) / 60.0
-        created       = myMarks[i]['Mark']['created']
-        try:    description = strip_tags(myMarks[i]['Mark']['comment'])
-        except: description = '-Failed to parse-'
+    for video__info in videos:
+        mark = video_info['Mark']
+        video_id = mark['video_id']
 
-        # skip if it's been marked as watched
-        if (myMarks[i]['Mark']['watched']) or (myMarks[i]['Mark']['delflag']):
-            # it's been marked as watched, delete the local copy
-            for filename in glob.glob( os.path.join( downloadlocation, '*-%s.*' % video_id )):
-                os.remove(filename)
-                print(("Removed watched or deleted videos & NFOs: '%s'" % filename).encode('utf-8'))
-                shouldCleanKodi = True
+        if mark.get('watched') or mark.get('delflag'):
+            remove_watched_video(video_id, config)
+            should_clean_kodi = True
             continue
+
+        video_file = find_video_file_for_id(video_id, config['download_location'])
+        if video_file:
+            print(f"Already downloaded: '{mark['title']}'")
         else:
-            # if the file already exists
-            if findVideoFilesForVideoID(video_id, downloadDir = downloadlocation):
-                print(("Already downloaded: '%s'" % title).encode('utf-8'))
-            else:
-                # if it hasn't been downloaded or marked watched, try to download it now
-                print(("Downlading %s from %s" % (title, videoURL) ).encode('utf-8'))
-                # youtube-dl does a good job of getting you the best quality video, but these are some tweaks that helped get my perefered format
-                # the -f argument limits things to 1080p (ie no 4K video when possible) and also prefer AVC video when possible (AVC has wide support)
-                # --merge-output-format FORMAT (perefers mkv as it's flexible & widely supported in Kodi & others)
-                # You might prefer other options though so feel free to edit as needed
-                subprocessCommand = [pathtoyoutubedl,
-                                      '-f bestvideo[height<=1080][vcodec*=avc]+bestaudio/best',
-                                      '--merge-output-format mp4',
-                                      '--add-metadata --all-subs --embed-subs --embed-thumbnail',
-                                      videoURL]
-                subprocess.call(shlex.split(" ".join(subprocessArgs)))
-                shouldScanKodi = True
+            download_video(video_info, config)
+            should_scan_kodi = True
 
-                if downloadtotmp: # now move files into place
-                    foundVideoFile = findVideoFilesForVideoID(video_id, expect1=True)
-                    print(("Move %s to %s" % (foundVideoFile, downloadlocation)))
-                    shutil.move(foundVideoFile, downloadlocation)
-
-            if writenfofiles:
-                # get info/metadata for file and save it as NFO
-                if findNFOFilesForVideoID(video_id, downloadDir = downloadlocation):
-                    # print(("Already set NFO metadata for '%s'" % title).encode('utf-8'))
-                    pass
-                else:
-                    # create an .nfo metadata file for Kodi etc
-                    foundVideoFile = findVideoFilesForVideoID(video_id, downloadDir = downloadlocation, expect1=True)
-                    nfoFilePath = os.path.splitext(foundVideoFile)[0] + '.nfo'
-
-                    # we have the default thumbnail url which is lower quality, look up a better one:
-                    thumbURL = subprocess.check_output([pathtoyoutubedl, '--get-thumbnail', videoURL]).strip()
-
-                    with open(nfoFilePath, "w") as nfoF:
-                        nfoF.write("<episodedetails>\n")
-                        nfoF.write("  <title>%s</title>\n" % title)
-                        nfoF.write("  <showtitle>%s</showtitle>\n" % channel_title)
-                        nfoF.write("  <aired>%s</aired>\n" % created)
-                        nfoF.write("  <plot>%s</plot>\n" % description)
-                        nfoF.write("  <runtime>%i</runtime>\n" % round(duration))
-                        nfoF.write("  <thumb>%s</thumb>\n" % thumbURL)
-                        nfoF.write("  <videourl>%s</videourl>\n" % videoURL)
-                        nfoF.write("</episodedetails>\n")
+        if config['write_nfo_files']:
+            create_nfo_file(video_info, config)
 
         print("---------------------------------")
 
-    if kodihostname:
-        #Login with custom credentials
-        if not kodiport: kodiport = 8080 # Kodi Web default port
-        kodi = Kodi("http://%s:%i/jsonrpc" % (kodihostname, kodiport), kodiuser, kodipassword)
-        assert kodi.JSONRPC.Ping()['result'] == 'pong', '\nERROR: bad or response from Kodi (@ %s)' % kodihostname
-        if shouldScanKodi or shouldCleanKodi:
-            kodi.GUI.ShowNotification({"title":"ToWatchList Downloader", "message":"New videos downloaded, update Kodi library…"})
-        if shouldScanKodi:
-            print(("Scanning Kodi Library (@ %s)" % kodihostname))
-            kodi.VideoLibrary.Scan()
-        if shouldCleanKodi:
-            print(("Cleaning Kodi Library (@ %s)" % kodihostname))
-            kodi.VideoLibrary.Clean()
-        if not shouldCleanKodi and not shouldScanKodi:
-            print(("No Scan or Clean of Kodi (@ %s) needed" % kodihostname))
+    notify_kodi(config, scan=should_scan_kodi, clean=should_clean_kodi)
+    print("Sync complete.")
 
-# Info/formatting for NFO example
-# <episodedetails>
-#   <title>Moby & The Void Pacific Choir - Are You Lost In The World Like Me (Official Video)</title>
-#   <showtitle>Moby VEVO</showtitle>
-#   <season>1</season>
-#   <episode>1</episode>
-#   <uniqueid>5586358</uniqueid>
-#   <aired>2016-07-10</aired>
-#   <plot>What starts as a perfect night for Pakistani-American student Nasir “Naz” Khan becomes a nightmare when he’s arrested for murder.</plot>
-#   <runtime>60</runtime>
-#   <displayseason />
-#   <displayepisode />
-#   <thumb>https://i.ytimg.com/vi/VASywEuqFd8/maxresdefault.jpg</thumb>
-#   <watched>false</watched>
-#   <credits>Richard Price</credits>
-#   <director>Steven Zaillian</director>
-#   <rating>8.7</rating>
-# </episodedetails>
+if __name__ == '__main__':
+    main()
