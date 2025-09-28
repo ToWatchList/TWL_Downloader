@@ -4,7 +4,13 @@ ToWatchList Downloader or `twl_downloader` is a Python script to automate downlo
 
 This project is designed to be run as a Docker container. It syncs your local video library with your ToWatchList account, downloading new videos and removing ones that have been marked as watched or deleted.
 
-It now prefers downloading videos in **4K resolution** and uses the **MKV** container format for the best quality.
+## Key Features
+
+-   **Best Quality Downloads**: Automatically downloads the best available video and audio streams and packages them in a high-quality MKV container.
+-   **Embedded Chapters**: Automatically embeds chapters into the video file from both YouTube's native chapters and from SponsorBlock data.
+-   **Rich Metadata**: Creates detailed `.nfo` files for media centers like Kodi, including the video description, upload date, and your personal ToWatchList comments.
+-   **Correct Timestamps**: Sets the final video file's modification date to the video's original upload date, making it easy to sort your library chronologically.
+-   **Cookie Support**: Can use your YouTube cookies to download age-restricted, private, or members-only videos.
 
 ## Getting Started
 
@@ -18,7 +24,7 @@ First, copy the example environment file and fill in your details:
 cp .env.example .env
 ```
 
-Now, edit the `.env` file to add your `TWL_API_KEY`.
+Now, edit the `.env` file to add your `TWL_API_KEY`. You can also customize other settings, such as the SponsorBlock categories.
 
 ### 2. Build and Run with Docker
 
@@ -48,19 +54,18 @@ The `make run` command will automatically mount this file into the container.
 
 ### Environment Variables
 
-The application is configured via environment variables, which are loaded from the `.env` file by the `Makefile`.
-
-| Variable                 | Description                                                                    | Default    |
-| ------------------------ | ------------------------------------------------------------------------------ | ---------- |
-| `TWL_API_KEY`            | **Required.** Your ToWatchList.com API key.                                    | (none)     |
-| `TWL_DOWNLOAD_LOCATION`  | The directory to save videos to.                                               | `./videos` |
-| `YOUTUBE_COOKIES_FILE`   | Optional. Path inside the container to a YouTube cookies file.                 | (none)     |
-| `TWL_WRITE_NFO_FILES`    | Set to `true` to generate `.nfo` metadata files for Kodi.                      | `false`    |
-| `TWL_DOWNLOAD_TO_TMP`    | Set to `true` to download to a temporary location before moving.               | `true`     |
-| `TWL_KODI_HOSTNAME`      | The hostname or IP address of your Kodi instance.                              | (none)     |
-| `TWL_KODI_PORT`          | The port for Kodi's web interface.                                             | `8080`     |
-| `TWL_KODI_USER`          | The username for Kodi's web interface.                                         | (none)     |
-| `TWL_KODI_PASSWORD`      | The password for Kodi's web interface.                                         | (none)     |
+| Variable                    | Description                                                                    | Default                                                  |
+| --------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| `TWL_API_KEY`               | **Required.** Your ToWatchList.com API key.                                    | (none)                                                   |
+| `TWL_DOWNLOAD_LOCATION`     | The directory to save videos to.                                               | `./videos`                                               |
+| `YOUTUBE_COOKIES_FILE`      | Optional. Path inside the container to a YouTube cookies file.                 | (none)                                                   |
+| `TWL_WRITE_NFO_FILES`       | Set to `true` to generate `.nfo` metadata files for Kodi.                      | `true`                                                   |
+| `SPONSORBLOCK_CATEGORIES`   | Comma-separated list of SponsorBlock categories to mark as chapters.           | `sponsor,intro,outro,selfpromo,preview,music_offtopic`   |
+| `TWL_DOWNLOAD_TO_TMP`       | Set to `true` to download to a temporary location before moving.               | `true`                                                   |
+| `TWL_KODI_HOSTNAME`         | The hostname or IP address of your Kodi instance.                              | (none)                                                   |
+| `TWL_KODI_PORT`             | The port for Kodi's web interface.                                             | `8080`                                                   |
+| `TWL_KODI_USER`             | The username for Kodi's web interface.                                         | (none)                                                   |
+| `TWL_KODI_PASSWORD`         | The password for Kodi's web interface.                                         | (none)                                                   |
 
 ## Development
 
@@ -88,12 +93,3 @@ To check the code for style issues and automatically format it, run:
 make lint
 make format
 ```
-
-## How it Works
-
-The container's entrypoint script first updates `yt-dlp` to the latest version, using the `/config` volume to cache the package. Then, it runs the main Python script which:
-1. Fetches the latest unwatched videos from your ToWatchList account via the API.
-2. Downloads any new videos using `yt-dlp`.
-3. Deletes any local video files that have been marked as watched or deleted on ToWatchList.
-4. Optionally, creates `.nfo` files for metadata.
-5. Optionally, sends a notification to a Kodi instance to scan or clean the library.
