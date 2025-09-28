@@ -59,7 +59,11 @@ def test_get_videos_from_api_failure(mocker):
 @patch("twl_downloader.yt_dlp.YoutubeDL")
 def test_download_video(mock_yt_dlp, tmp_path):
     """Test the video download function."""
-    config = {"download_to_tmp": False, "download_location": str(tmp_path)}
+    config = {
+        "download_to_tmp": False,
+        "download_location": str(tmp_path),
+        "youtube_cookies_file": None,
+    }
     video_info = {
         "Mark": {
             "title": "Test Video",
@@ -84,6 +88,36 @@ def test_download_video(mock_yt_dlp, tmp_path):
 
     # Check that download was called
     mock_ydl_instance.download.assert_called_with(["http://example.com/video"])
+
+
+@patch("twl_downloader.yt_dlp.YoutubeDL")
+@patch("os.path.isfile", return_value=True)
+def test_download_video_with_cookies(mock_is_file, mock_yt_dlp, monkeypatch, tmp_path):
+    """Test that the cookiefile option is added when the file exists."""
+    monkeypatch.setenv("TWL_API_KEY", "test_api_key")
+    monkeypatch.setenv("YOUTUBE_COOKIES_FILE", "/test/cookies.txt")
+    config = twl_downloader.get_config()
+    config["download_location"] = str(tmp_path)
+
+    video_info = {
+        "Mark": {
+            "title": "Test Video",
+            "source_url": "http://example.com/video",
+            "video_id": "test_id",
+        }
+    }
+
+    mock_ydl_instance = MagicMock()
+    mock_yt_dlp.return_value.__enter__.return_value = mock_ydl_instance
+
+    twl_downloader.download_video(video_info, config)
+
+    # Check that YoutubeDL was initialized with the cookiefile option
+    mock_yt_dlp.assert_called_once()
+    args, kwargs = mock_yt_dlp.call_args
+    ydl_opts_passed = args[0]
+    assert "cookiefile" in ydl_opts_passed
+    assert ydl_opts_passed["cookiefile"] == "/test/cookies.txt"
 
 
 @patch("os.remove")

@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-# coding=utf-8
-"""
-This script downloads a user's latest ToWatchList unwatched videos using yt-dlp.
-"""
-
 import glob
 import os
 import shutil
@@ -50,6 +44,7 @@ def get_config():
         "kodi_password": os.getenv("TWL_KODI_PASSWORD"),
         "download_to_tmp": os.getenv("TWL_DOWNLOAD_TO_TMP", "true").lower()
         in ("true", "1", "t"),
+        "youtube_cookies_file": os.getenv("YOUTUBE_COOKIES_FILE"),
     }
     if not config["api_key"]:
         sys.exit("ERROR: TWL_API_KEY environment variable not set.")
@@ -65,7 +60,7 @@ def get_all_files_for_video_id(video_id, download_dir):
 def find_video_file_for_id(video_id, download_dir):
     """Finds the main video file for a given video_id."""
     # Common video extensions that yt-dlp might output.
-    video_extensions = ["mp4", "mkv", "webm", "mov", "flv", "avi"]
+    video_extensions = ["mkv", "mp4", "webm", "mov", "flv", "avi"]
     for ext in video_extensions:
         files = glob.glob(os.path.join(download_dir, f"*-{video_id}.{ext}"))
         if files:
@@ -103,9 +98,12 @@ def download_video(video_info, config):
     ).rstrip()
     output_template = os.path.join(output_path, f"{safe_title}-{video_id}.%(ext)s")
 
+    # Prefer 4K, fallback to best. Prefer MKV container.
+    ydl_format = "bestvideo[height>=2160]+bestaudio/bestvideo+bestaudio/best"
+
     ydl_opts = {
-        "format": "bestvideo[height<=1080][vcodec*=avc]+bestaudio/best",
-        "merge_output_format": "mp4",
+        "format": ydl_format,
+        "merge_output_format": "mkv",
         "outtmpl": output_template,
         "writethumbnail": True,
         "writesubtitles": True,
@@ -113,6 +111,13 @@ def download_video(video_info, config):
         "addmetadata": True,
         "quiet": True,
     }
+
+    # Add cookie support if a valid file is provided
+    if config["youtube_cookies_file"] and os.path.isfile(
+        config["youtube_cookies_file"]
+    ):
+        ydl_opts["cookiefile"] = config["youtube_cookies_file"]
+        print("Using cookies file for youtube-dl")
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -128,9 +133,7 @@ def download_video(video_info, config):
                 print(f"Moving {os.path.basename(f)} to {config['download_location']}")
                 shutil.move(f, config["download_location"])
             except shutil.Error as e:
-                print(
-                    f"WARN: Could not move file {f}. It may already exist. Details: {e}"
-                )
+                print(f"WARN: Could not move file {f}. It may already exist. Details: {e}")
 
 
 def create_nfo_file(video_info, config):
@@ -138,9 +141,7 @@ def create_nfo_file(video_info, config):
     video_id = video_info["Mark"]["video_id"]
     video_file = find_video_file_for_id(video_id, config["download_location"])
     if not video_file:
-        print(
-            f"WARNING: Video file for '{video_id}' not found. Cannot create NFO file."
-        )
+        print(f"WARNING: Video file for '{video_id}' not found. Cannot create NFO file.")
         return
 
     nfo_file_path = os.path.splitext(video_file)[0] + ".nfo"
@@ -163,13 +164,13 @@ def create_nfo_file(video_info, config):
 
     nfo_content = f"""
 <episodedetails>
-  <title>{video_info["Mark"]["title"]}</title>
-  <showtitle>{video_info["Mark"]["channel_title"]}</showtitle>
-  <aired>{video_info["Mark"]["created"]}</aired>
-  <plot>{strip_tags(video_info["Mark"].get("comment", ""))}</plot>
-  <runtime>{round(int(video_info["Mark"]["duration"]) / 60.0)}</runtime>
+  <title>{video_info['Mark']['title']}</title>
+  <showtitle>{video_info['Mark']['channel_title']}</showtitle>
+  <aired>{video_info['Mark']['created']}</aired>
+  <plot>{strip_tags(video_info['Mark'].get('comment', ''))}</plot>
+  <runtime>{round(int(video_info['Mark']['duration']) / 60.0)}</runtime>
   <thumb>{thumb_url}</thumb>
-  <videourl>{video_info["Mark"]["source_url"]}</videourl>
+  <videourl>{video_info['Mark']['source_url']}</videourl>
 </episodedetails>
 """
     with open(nfo_file_path, "w", encoding="utf-8") as nfo_file:
@@ -205,10 +206,7 @@ def notify_kodi(config, scan=False, clean=False):
 
         if scan or clean:
             kodi.GUI.ShowNotification(
-                {
-                    "title": "ToWatchList Downloader",
-                    "message": "Updating Kodi library...",
-                }
+                {"title": "ToWatchList Downloader", "message": "Updating Kodi library..."}
             )
         if scan:
             print("Scanning Kodi video library...")
