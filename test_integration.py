@@ -20,7 +20,7 @@ def test_download_rick_astley(tmp_path):
 
     # Minimal config for the download function
     config = {
-        "download_to_tmp": False,
+        "tmp_download_location": None,  # Test direct download
         "download_location": temp_dir,
         "youtube_cookies_file": None,
         "sponsorblock_categories": [],
