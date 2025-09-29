@@ -39,31 +39,29 @@ def test_download_rick_astley(tmp_path):
     assert len(downloaded_files) == 1, f"Expected 1 MKV file, but found {len(downloaded_files)}"
     video_path = downloaded_files[0]
 
-    # Use ffprobe to check the video properties
+    # Use ffprobe to check the video properties for exact values
     ffprobe_cmd = [
         "ffprobe",
         "-v",
-        "error",
-        "-select_streams",
-        "v:0",
-        "-show_entries",
-        "stream=width,height,duration",
-        "-of",
+        "quiet",
+        "-print_format",
         "json",
+        "-show_format",
+        "-show_streams",
         str(video_path),
     ]
 
     result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe failed with error: {result.stderr}"
 
-    media_info = json.loads(result.stdout)["streams"][0]
+    media_info = json.loads(result.stdout)
 
-    # Check duration (3m 33s = 213s). Allow a small tolerance.
-    duration = float(media_info["duration"])
-    assert 212 < duration < 214, f"Expected duration to be ~213s, but got {duration}s"
+    # Check for the exact duration from the format info
+    duration = media_info["format"]["duration"]
+    assert duration == "213.068000", f"Expected duration to be '213.068000', but got {duration}"
 
-    # Check resolution (4K is 3840x2160)
-    height = int(media_info["height"])
+    # Check for the exact resolution from the stream info
+    height = int(media_info["streams"][0]["height"])
     assert height == 2160, f"Expected height to be 2160 (4K), but got {height}"
 
     print(f"Successfully verified '{video_path.name}' has duration {duration}s and height {height}p.")
