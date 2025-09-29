@@ -96,6 +96,8 @@ You can also run the tests directly on your local machine:
 make test-local
 ```
 
+**Note**: The `test-local` command includes an integration test that requires `ffmpeg` to be installed on your system.
+
 ### Linting & Formatting
 
 To check the code for style issues and automatically format it, run:

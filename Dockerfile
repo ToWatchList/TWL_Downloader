@@ -17,10 +17,13 @@ RUN uv pip install --python /opt/venv/bin/python --no-cache -r requirements.txt
 
 
 # Stage 2: The Tester
-# This stage builds on the builder and adds test dependencies.
+# This stage builds on the builder and adds test dependencies and ffmpeg.
 FROM builder AS tester
 
 WORKDIR /app
+
+# Install ffmpeg for video analysis in tests
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Install dev dependencies into the virtual environment
 COPY requirements-dev.txt .
