@@ -1,6 +1,6 @@
 # ToWatchList Downloader
 
-ToWatchList Downloader or `twl_downloader` is a Python script to automate downloading videos from [ToWatchList.com](https://towatchlist.com) using yt-dlp.
+ToWatchList Downloader or `twl-downloader` is a Python script to automate downloading videos from [ToWatchList.com](https://towatchlist.com) using yt-dlp.
 
 This project is designed to be run as a Docker container. It syncs your local video library with your ToWatchList account, downloading new videos and removing ones that have been marked as watched or deleted.
 
@@ -38,24 +38,38 @@ make build
 make run
 ```
 
-The `make run` command uses the paths defined in the `Makefile` and the configuration from your `.env` file.
+The `make run` command uses the configuration from your `.env` file and mounts local directories for downloads (`./videos`) and configuration (`./config`).
+
+### Using YouTube Cookies
+
+To download age-restricted or private videos that require a login, you can provide a cookies file. This allows `yt-dlp` to make requests as if you were logged into YouTube in your browser.
+
+1.  **Install a Browser Extension**: Use an extension that can export cookies in the `Netscape cookie file` format (a plain text file). The user recommended [cookies.txt](https://github.com/hrdl-github/cookies-txt), which is available for [Chrome](https://chrome.google.com/webstore/detail/cookiestxt/njabckikapfpffapmjgojcnbfjonfjfg) and [Firefox](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/).
+2.  **Export Your Cookies**: Go to `youtube.com` in your browser. Click the extension's icon and then the "Export" or "Download" button to save the `cookies.txt` file.
+3.  **Place the Cookies File**: Move the downloaded `cookies.txt` file into your application's config directory. Using the example path, this would be `/exos/docker-data/config/appdata/twl_downloader/cookies.txt`.
+4.  **Update Your Configuration**: In your `.env` file, set the `YOUTUBE_COOKIES_FILE` variable to point to the location of the file *inside the container*:
+    ```
+    YOUTUBE_COOKIES_FILE=/config/cookies.txt
+    ```
+
+Now, when you run the application, it will automatically use these cookies for YouTube downloads.
 
 ### Advanced `docker run` Example
 
-If you prefer to use the `docker run` command directly, you can customize the volume mounts. Here is an example using the specific paths you provided:
+If you prefer to use the `docker run` command directly, you can customize the volume mounts to match your system's paths. Here is an example using the specific paths you provided:
 
 ```bash
 docker run --rm \
   --env-file .env \
   -v "/exos/video/Other/ToWatchList/":/downloads \
-  -v "$HOME/youtube-cookies-for-towatchlist.txt":/config/cookies.txt \
-  --name towatchlist-downloader \
-  towatchlist-downloader
+  -v "/exos/docker-data/config/appdata/twl_downloader/":/config \
+  --name twl-downloader \
+  twl-downloader
 ```
 
 In this example:
 -   Your video download folder `/exos/video/Other/ToWatchList/` is mapped to the `/downloads` directory inside the container.
--   Your cookies file `~/youtube-cookies-for-towatchlist.txt` is mapped to `/config/cookies.txt` inside the container. Make sure your `.env` file points to this container path: `YOUTUBE_COOKIES_FILE=/config/cookies.txt`.
+-   Your application data folder `/exos/docker-data/config/appdata/twl_downloader/` is mapped to the `/config` directory inside the container. This is where `yt-dlp`'s cache and your `cookies.txt` file will be stored.
 
 ### Environment Variables
 

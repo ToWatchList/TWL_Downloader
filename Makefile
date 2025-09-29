@@ -1,8 +1,8 @@
 # Makefile for ToWatchList Downloader
 
 # Define variables
-IMAGE_NAME := towatchlist-downloader
-TEST_IMAGE_NAME := towatchlist-downloader-tester
+IMAGE_NAME := twl-downloader
+TEST_IMAGE_NAME := twl-downloader-tester
 ENV_FILE := .env
 
 # Phony targets
@@ -31,8 +31,9 @@ run:
 # Expects a .env file with TWL_API_KEY
 run-local:
 	@echo "Running application locally..."
-	@if [ ! -f $(ENV_FILE) ]; then \
-		echo "ERROR: .env file not found. Please create one from .env.example."; \
+	@if ! command -v ffmpeg &> /dev/null; then \
+		echo "ERROR: ffmpeg is not installed. It is required for local integration tests."; \
+		echo "Please install ffmpeg (e.g., 'sudo apt-get install ffmpeg' or 'brew install ffmpeg') and try again."; \
 		exit 1; \
 	fi
 	@uv pip install --system -r requirements.txt > /dev/null
