@@ -38,14 +38,14 @@ def get_config():
     config = {
         "api_key": os.getenv("TWL_API_KEY"),
         "download_location": os.getenv("TWL_DOWNLOAD_LOCATION", "/downloads"),
+        "tmp_download_location": os.getenv("TWL_TMP_DOWNLOAD_LOCATION"),
+        "lookback_days": int(os.getenv("TWL_LOOKBACK_DAYS", "28")),
         "write_nfo_files": os.getenv("TWL_WRITE_NFO_FILES", "true").lower()
         in ("true", "1", "t"),
         "kodi_hostname": os.getenv("TWL_KODI_HOSTNAME"),
         "kodi_port": int(os.getenv("TWL_KODI_PORT", "8080")),
         "kodi_user": os.getenv("TWL_KODI_USER"),
         "kodi_password": os.getenv("TWL_KODI_PASSWORD"),
-        "download_to_tmp": os.getenv("TWL_DOWNLOAD_TO_TMP", "true").lower()
-        in ("true", "1", "t"),
         "youtube_cookies_file": os.getenv("YOUTUBE_COOKIES_FILE"),
         "sponsorblock_categories": os.getenv(
             "SPONSORBLOCK_CATEGORIES", sponsorblock_default
@@ -73,9 +73,11 @@ def find_video_file_for_id(video_id, download_dir):
     return all_files[0] if all_files else None
 
 
-def get_videos_from_api(api_key):
+def get_videos_from_api(api_key, lookback_days):
     """Fetches the list of videos from the ToWatchList API."""
-    api_url = f"https://towatchlist.com/api/v1/marks?since=-28days&uid={api_key}"
+    api_url = (
+        f"https://towatchlist.com/api/v1/marks?since=-{lookback_days}days&uid={api_key}"
+    )
     try:
         response = requests.get(api_url)
         response.raise_for_status()
@@ -107,7 +109,13 @@ def download_video(url, info_dict, config):
     video_id = info_dict.get("id", "UnknownID")
     print(f"Downloading: '{title}' ({url})")
 
-    output_path = "/tmp" if config["download_to_tmp"] else config["download_location"]
+    # Use the temporary location if provided, otherwise download directly.
+    output_path = (
+        config["tmp_download_location"]
+        if config["tmp_download_location"]
+        else config["download_location"]
+    )
+
     safe_title = "".join(
         c for c in title if c.isalnum() or c in (" ", "-", "_")
     ).rstrip()
@@ -115,8 +123,15 @@ def download_video(url, info_dict, config):
 
     postprocessors = [
         {"key": "FFmpegMetadata", "add_metadata": True},
-        {"key": "SponsorBlock", "when": "pre_process", "categories": config["sponsorblock_categories"]},
-        {"key": "ModifyChapters", "remove_sponsor_segments": config["sponsorblock_categories"]},
+        {
+            "key": "SponsorBlock",
+            "when": "pre_process",
+            "categories": config["sponsorblock_categories"],
+        },
+        {
+            "key": "ModifyChapters",
+            "remove_sponsor_segments": config["sponsorblock_categories"],
+        },
     ]
 
     ydl_format = "bestvideo+bestaudio/best"
@@ -155,7 +170,9 @@ def set_file_modification_time(video_path, info_dict):
             upload_datetime = datetime.strptime(upload_date_str, "%Y%m%d")
             mod_time = upload_datetime.timestamp()
             os.utime(video_path, (mod_time, mod_time))
-            print(f"Set modification date for '{os.path.basename(video_path)}' to {upload_datetime.date()}")
+            print(
+                f"Set modification date for '{os.path.basename(video_path)}' to {upload_datetime.date()}"
+            )
         except (ValueError, TypeError):
             print(f"WARNING: Could not parse upload date '{upload_date_str}'")
 
@@ -193,7 +210,8 @@ Downloaded on: {datetime.now().strftime("%Y-%m-%d")}
 """
 
     genres_xml = "".join(
-        f"<genre>{genre}</genre>\n  " for genre in yt_video_info.get("categories", [])
+        f"<genre>{genre}</genre>\n  "
+        for genre in yt_video_info.get("categories", [])
     )
     tags_xml = "".join(
         f"<tag>{tag}</tag>\n  " for tag in yt_video_info.get("tags", [])
@@ -224,7 +242,9 @@ Downloaded on: {datetime.now().strftime("%Y-%m-%d")}
 
 def remove_watched_video(video_id, config):
     """Removes local files for a watched or deleted video."""
-    files_to_remove = get_all_files_for_video_id(video_id, config["download_location"])
+    files_to_remove = get_all_files_for_video_id(
+        video_id, config["download_location"]
+    )
     for f in files_to_remove:
         try:
             os.remove(f)
@@ -251,7 +271,10 @@ def notify_kodi(config, scan=False, clean=False):
 
         if scan or clean:
             kodi.GUI.ShowNotification(
-                {"title": "ToWatchList Downloader", "message": "Updating Kodi library..."}
+                {
+                    "title": "ToWatchList Downloader",
+                    "message": "Updating Kodi library...",
+                }
             )
         if scan:
             print("Scanning Kodi video library...")
@@ -270,10 +293,10 @@ def main():
     """Main function to run the sync process."""
     config = get_config()
     os.makedirs(config["download_location"], exist_ok=True)
-    if config["download_to_tmp"]:
-        os.makedirs("/tmp", exist_ok=True)
+    if config["tmp_download_location"]:
+        os.makedirs(config["tmp_download_location"], exist_ok=True)
 
-    videos = get_videos_from_api(config["api_key"])
+    videos = get_videos_from_api(config["api_key"], config["lookback_days"])
     print(f"Syncing ToWatchList with '{config['download_location']}'")
     print(f"Found {len(videos)} videos to process.")
     print("---------------------------------")
@@ -301,17 +324,20 @@ def main():
 
             download_video(video_url, yt_video_info, config)
 
-            if config["download_to_tmp"]:
-                temp_video_file = find_video_file_for_id(video_id, "/tmp")
-                if temp_video_file:
-                    downloaded_files = get_all_files_for_video_id(video_id, "/tmp")
-                    for f in downloaded_files:
-                        try:
-                            shutil.move(f, config["download_location"])
-                        except shutil.Error as e:
-                            print(f"WARN: Could not move file {f}. It may already exist. Details: {e}")
+            if config["tmp_download_location"]:
+                tmp_dir = config["tmp_download_location"]
+                downloaded_files = get_all_files_for_video_id(video_id, tmp_dir)
+                for f in downloaded_files:
+                    try:
+                        shutil.move(f, config["download_location"])
+                    except shutil.Error as e:
+                        print(
+                            f"WARN: Could not move file {f}. It may already exist. Details: {e}"
+                        )
 
-            final_video_path = find_video_file_for_id(video_id, config["download_location"])
+            final_video_path = find_video_file_for_id(
+                video_id, config["download_location"]
+            )
             set_file_modification_time(final_video_path, yt_video_info)
 
             if config["write_nfo_files"]:

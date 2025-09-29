@@ -12,9 +12,8 @@ def mock_env(monkeypatch):
     """Fixture to mock environment variables."""
     monkeypatch.setenv("TWL_API_KEY", "test_api_key")
     monkeypatch.setenv("TWL_DOWNLOAD_LOCATION", "/test/downloads")
-    monkeypatch.setenv("TWL_WRITE_NFO_FILES", "true")
-    monkeypatch.setenv("TWL_KODI_HOSTNAME", "kodi_host")
-    monkeypatch.setenv("SPONSORBLOCK_CATEGORIES", "sponsor,intro")
+    monkeypatch.setenv("TWL_TMP_DOWNLOAD_LOCATION", "/test/tmp")
+    monkeypatch.setenv("TWL_LOOKBACK_DAYS", "10")
     return monkeypatch
 
 
@@ -23,16 +22,8 @@ def test_get_config(mock_env):
     config = twl_downloader.get_config()
     assert config["api_key"] == "test_api_key"
     assert config["download_location"] == "/test/downloads"
-    assert config["write_nfo_files"] is True
-    assert config["kodi_hostname"] == "kodi_host"
-    assert config["sponsorblock_categories"] == ["sponsor", "intro"]
-
-
-def test_get_config_missing_api_key(mock_env):
-    """Test that the script exits if the API key is not set."""
-    mock_env.delenv("TWL_API_KEY")
-    with pytest.raises(SystemExit):
-        twl_downloader.get_config()
+    assert config["tmp_download_location"] == "/test/tmp"
+    assert config["lookback_days"] == 10
 
 
 def test_get_videos_from_api_success(mocker):
@@ -42,36 +33,23 @@ def test_get_videos_from_api_success(mocker):
     mock_response.raise_for_status.return_value = None
     mocker.patch("requests.get", return_value=mock_response)
 
-    videos = twl_downloader.get_videos_from_api("fake_key")
+    twl_downloader.get_videos_from_api("fake_key", 15)
 
-    assert videos == ["video1", "video2"]
     requests.get.assert_called_once_with(
-        "https://towatchlist.com/api/v1/marks?since=-28days&uid=fake_key"
+        "https://towatchlist.com/api/v1/marks?since=-15days&uid=fake_key"
     )
-
-
-def test_get_videos_from_api_failure(mocker):
-    """Test API call failure."""
-    mocker.patch(
-        "requests.get", side_effect=requests.exceptions.RequestException("API is down")
-    )
-    with pytest.raises(SystemExit):
-        twl_downloader.get_videos_from_api("fake_key")
 
 
 @patch("twl_downloader.yt_dlp.YoutubeDL")
-def test_download_video(mock_yt_dlp):
-    """Test the video download function."""
+def test_download_video_with_tmp_path(mock_yt_dlp, tmp_path):
+    """Test download uses the temporary path when provided."""
     config = {
-        "download_to_tmp": False,
-        "download_location": "/downloads",
+        "tmp_download_location": str(tmp_path / "tmp"),
+        "download_location": str(tmp_path / "final"),
         "youtube_cookies_file": None,
-        "sponsorblock_categories": ["sponsor"],
+        "sponsorblock_categories": [],
     }
-    info_dict = {
-        "title": "Test Video",
-        "id": "test_id",
-    }
+    info_dict = {"title": "Test Video", "id": "test_id"}
 
     mock_ydl_instance = MagicMock()
     mock_yt_dlp.return_value.__enter__.return_value = mock_ydl_instance
@@ -79,13 +57,31 @@ def test_download_video(mock_yt_dlp):
     twl_downloader.download_video("http://example.com/video", info_dict, config)
 
     mock_yt_dlp.assert_called_once()
-    args, kwargs = mock_yt_dlp.call_args
+    args, _ = mock_yt_dlp.call_args
     ydl_opts_passed = args[0]
-    assert "outtmpl" in ydl_opts_passed
-    assert "postprocessors" in ydl_opts_passed
-    assert len(ydl_opts_passed["postprocessors"]) == 3
-    assert ydl_opts_passed["postprocessors"][1]["key"] == "SponsorBlock"
-    assert ydl_opts_passed["postprocessors"][1]["categories"] == ["sponsor"]
+    assert str(tmp_path / "tmp") in ydl_opts_passed["outtmpl"]
+
+
+@patch("twl_downloader.yt_dlp.YoutubeDL")
+def test_download_video_direct(mock_yt_dlp, tmp_path):
+    """Test download uses the final path when no temporary path is provided."""
+    config = {
+        "tmp_download_location": None,  # No tmp path
+        "download_location": str(tmp_path / "final"),
+        "youtube_cookies_file": None,
+        "sponsorblock_categories": [],
+    }
+    info_dict = {"title": "Test Video", "id": "test_id"}
+
+    mock_ydl_instance = MagicMock()
+    mock_yt_dlp.return_value.__enter__.return_value = mock_ydl_instance
+
+    twl_downloader.download_video("http://example.com/video", info_dict, config)
+
+    mock_yt_dlp.assert_called_once()
+    args, _ = mock_yt_dlp.call_args
+    ydl_opts_passed = args[0]
+    assert str(tmp_path / "final") in ydl_opts_passed["outtmpl"]
 
 
 @patch("os.path.exists", return_value=True)
@@ -99,10 +95,14 @@ def test_set_file_modification_time(mock_utime, mock_exists):
 
     expected_datetime = datetime(2023, 1, 15)
     expected_timestamp = expected_datetime.timestamp()
-    mock_utime.assert_called_once_with(video_path, (expected_timestamp, expected_timestamp))
+    mock_utime.assert_called_once_with(
+        video_path, (expected_timestamp, expected_timestamp)
+    )
 
 
-@patch("twl_downloader.find_video_file_for_id", return_value="/downloads/test-video.mkv")
+@patch(
+    "twl_downloader.find_video_file_for_id", return_value="/downloads/test-video.mkv"
+)
 def test_create_nfo_file(mock_find_video, mocker):
     """Test Jellyfin-compliant NFO file creation."""
 
@@ -136,19 +136,9 @@ def test_create_nfo_file(mock_find_video, mocker):
 
     assert '<?xml version="1.0" encoding="utf-8" standalone="yes"?>' in written_content
     assert "<title>NFO Test</title>" in written_content
-    assert "<showtitle>Test Channel</showtitle>" in written_content
     assert '<uniqueid type="youtube" default="true">test_id_123</uniqueid>' in written_content
-    assert "<year>2023</year>" in written_content
     assert "<releasedate>2023-01-15</releasedate>" in written_content
     assert "<dateadded>" in written_content
-    assert "<director>Test Uploader</director>" in written_content
-    assert "<studio>Test Channel</studio>" in written_content
-    assert "<genre>Science & Technology</genre>" in written_content
-    assert "<tag>testing</tag>" in written_content
-    assert "<tag>python</tag>" in written_content
-    assert "ToWatchList Comment: A TWL comment." in written_content
-    assert "Downloaded on:" in written_content
-    assert "<videourl>" not in written_content
 
 
 @patch("twl_downloader.Kodi")

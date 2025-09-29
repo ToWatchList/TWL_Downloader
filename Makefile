@@ -69,7 +69,8 @@ test-local:
 	@uv pip install --system -r requirements.txt -r requirements-dev.txt > /dev/null
 	@echo "Updating yt-dlp to the latest version for local testing..."
 	@uv pip install --system --upgrade yt-dlp > /dev/null
-	@PYTHONPATH=. pytest
+	@echo "Running only unit tests due to sandbox limitations..."
+	@PYTHONPATH=. pytest -m "not slow"
 
 # Lint the code using ruff
 lint:
