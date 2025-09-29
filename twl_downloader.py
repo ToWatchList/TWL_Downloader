@@ -2,7 +2,7 @@ import glob
 import os
 import shutil
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 
 import requests
@@ -161,7 +161,7 @@ def set_file_modification_time(video_path, info_dict):
 
 
 def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
-    """Creates an NFO file with rich metadata."""
+    """Creates a Jellyfin-compliant NFO file with rich metadata."""
     if not yt_video_info or not os.path.exists(video_file_path):
         return
 
@@ -171,32 +171,51 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
 
     print(f"Creating NFO file for: {yt_video_info.get('title')}")
 
+    # --- Prepare metadata fields ---
     upload_date = yt_video_info.get("upload_date")
-    aired_date = ""
+    release_date_str = ""
+    year_str = ""
     if upload_date:
         try:
-            aired_date = datetime.strptime(upload_date, "%Y%m%d").strftime("%Y-%m-%d")
+            dt_upload = datetime.strptime(upload_date, "%Y%m%d")
+            release_date_str = dt_upload.strftime("%Y-%m-%d")
+            year_str = dt_upload.strftime("%Y")
         except (ValueError, TypeError):
             pass
 
-    download_date = datetime.now().strftime("%Y-%m-%d")
+    download_timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     plot = f"""{yt_video_info.get('description', '')}
 
 ---
 ToWatchList Comment: {strip_tags(twl_video_info['Mark'].get('comment', ''))}
-Downloaded on: {download_date}
+Downloaded on: {datetime.now().strftime("%Y-%m-%d")}
 """
 
-    nfo_content = f"""
+    genres_xml = "".join(
+        f"<genre>{genre}</genre>\n  " for genre in yt_video_info.get("categories", [])
+    )
+    tags_xml = "".join(
+        f"<tag>{tag}</tag>\n  " for tag in yt_video_info.get("tags", [])
+    )
+
+    # --- Build the NFO XML content ---
+    nfo_content = f"""\
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <episodedetails>
   <title>{yt_video_info.get('title', '')}</title>
   <showtitle>{yt_video_info.get('channel', '')}</showtitle>
-  <aired>{aired_date}</aired>
+  <uniqueid type="youtube" default="true">{yt_video_info.get('id', '')}</uniqueid>
+  <year>{year_str}</year>
+  <releasedate>{release_date_str}</releasedate>
+  <dateadded>{download_timestamp_str}</dateadded>
   <plot>{plot}</plot>
   <runtime>{round(yt_video_info.get('duration', 0) / 60.0)}</runtime>
-  <thumb>{yt_video_info.get('thumbnail', '')}</thumb>
-  <videourl>{yt_video_info.get('webpage_url', '')}</videourl>
+  <studio>{yt_video_info.get('channel', '')}</studio>
+  <director>{yt_video_info.get('uploader', '')}</director>
+  <thumb aspect="thumb">{yt_video_info.get('thumbnail', '')}</thumb>
+  {genres_xml}
+  {tags_xml}
 </episodedetails>
 """
     with open(nfo_file_path, "w", encoding="utf-8") as nfo_file:

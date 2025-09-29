@@ -104,10 +104,9 @@ def test_set_file_modification_time(mock_utime, mock_exists):
 
 @patch("twl_downloader.find_video_file_for_id", return_value="/downloads/test-video.mkv")
 def test_create_nfo_file(mock_find_video, mocker):
-    """Test NFO file creation with rich metadata."""
+    """Test Jellyfin-compliant NFO file creation."""
 
     def mock_path_exists(path):
-        # Let the video file exist, but not the NFO file yet.
         return path.endswith(".mkv")
 
     mocker.patch("os.path.exists", side_effect=mock_path_exists)
@@ -115,13 +114,17 @@ def test_create_nfo_file(mock_find_video, mocker):
 
     twl_video_info = {"Mark": {"comment": "A TWL comment."}}
     yt_video_info = {
+        "id": "test_id_123",
         "title": "NFO Test",
         "channel": "Test Channel",
+        "uploader": "Test Uploader",
         "upload_date": "20230115",
         "description": "The main description.",
         "duration": 360,
         "thumbnail": "http://thumb.url/img.jpg",
         "webpage_url": "http://example.com/nfo_video",
+        "categories": ["Science & Technology"],
+        "tags": ["testing", "python"],
     }
 
     twl_downloader.create_nfo_file(
@@ -131,8 +134,18 @@ def test_create_nfo_file(mock_find_video, mocker):
     handle = mock_open_file()
     written_content = "".join(call.args[0] for call in handle.write.call_args_list)
 
+    assert '<?xml version="1.0" encoding="utf-8" standalone="yes"?>' in written_content
     assert "<title>NFO Test</title>" in written_content
-    assert "<aired>2023-01-15</aired>" in written_content
-    assert "The main description." in written_content
+    assert "<showtitle>Test Channel</showtitle>" in written_content
+    assert '<uniqueid type="youtube" default="true">test_id_123</uniqueid>' in written_content
+    assert "<year>2023</year>" in written_content
+    assert "<releasedate>2023-01-15</releasedate>" in written_content
+    assert "<dateadded>" in written_content
+    assert "<director>Test Uploader</director>" in written_content
+    assert "<studio>Test Channel</studio>" in written_content
+    assert "<genre>Science & Technology</genre>" in written_content
+    assert "<tag>testing</tag>" in written_content
+    assert "<tag>python</tag>" in written_content
     assert "ToWatchList Comment: A TWL comment." in written_content
     assert "Downloaded on:" in written_content
+    assert "<videourl>" not in written_content
