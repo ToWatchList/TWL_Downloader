@@ -22,8 +22,9 @@ run:
 	@echo "Running application in Docker..."
 	@docker run --rm \
 		--env-file $(ENV_FILE) \
-		-v "$(shell pwd)/videos":/downloads \
-		-v "$(shell pwd)/config":/config \
+		-v "/exos/video/Other/ToWatchList/":/downloads \
+		-v "/exos/docker-data/config/appdata/twl_downloader/":/config \
+		-v "/exos/tmp/":/tmp \
 		--name $(IMAGE_NAME) \
 		$(IMAGE_NAME)
 

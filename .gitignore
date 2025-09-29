@@ -35,3 +35,6 @@ nosetests.xml
 .pydevproject
 *.sublime-project
 *.sublime-workspace
+
+# Environment copy from example
+.env
