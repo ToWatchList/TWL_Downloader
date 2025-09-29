@@ -13,7 +13,7 @@ RUN uv venv /opt/venv
 # Copy only the requirements file and install dependencies into the venv.
 # This leverages Docker's layer caching.
 COPY requirements.txt .
-RUN /opt/venv/bin/uv pip install --no-cache -r requirements.txt
+RUN uv pip install --python /opt/venv/bin/python --no-cache -r requirements.txt
 
 
 # Stage 2: The Tester
@@ -22,15 +22,15 @@ FROM builder AS tester
 
 WORKDIR /app
 
-# Set the PATH to use the virtual environment's python and packages
-ENV PATH="/opt/venv/bin:$PATH"
-
 # Install dev dependencies into the virtual environment
 COPY requirements-dev.txt .
-RUN uv pip install --no-cache -r requirements-dev.txt
+RUN uv pip install --python /opt/venv/bin/python --no-cache -r requirements-dev.txt
 
 # Copy the application and test code
 COPY . .
+
+# Set the PATH to use the virtual environment's python and packages
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Set the command to run tests. PYTHONPATH is needed so pytest can find the module.
 CMD ["/bin/sh", "-c", "PYTHONPATH=. pytest"]
