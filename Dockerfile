@@ -8,12 +8,14 @@ WORKDIR /app
 RUN pip install uv
 
 # Create a virtual environment for the application.
-RUN uv venv /opt/venv
+RUN python -m venv /opt/venv
 
 # Copy only the requirements file and install dependencies into the venv.
 # This leverages Docker's layer caching.
 COPY requirements.txt .
-RUN /opt/venv/bin/uv pip install --no-cache -r requirements.txt
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/python -m pip install --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 
 # Stage 2: The Final Image
@@ -29,14 +31,11 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
 # Copy the application scripts.
-COPY twl_downloader.py .
-COPY entrypoint.sh .
+COPY twl_downloader.py entrypoint.sh ./
 
 # Make the entrypoint script executable.
-RUN chmod +x entrypoint.sh
-
-# Create a non-root user for security.
-RUN useradd --create-home appuser
+RUN chmod +x entrypoint.sh && \
+    useradd --create-home appuser
 USER appuser
 
 # Add the virtual environment's bin directory to the PATH.
