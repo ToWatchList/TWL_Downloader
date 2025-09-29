@@ -8,17 +8,35 @@ WORKDIR /app
 RUN pip install uv
 
 # Create a virtual environment for the application.
-RUN python -m venv /opt/venv
+RUN uv venv /opt/venv
 
 # Copy only the requirements file and install dependencies into the venv.
 # This leverages Docker's layer caching.
 COPY requirements.txt .
-RUN python -m venv /opt/venv && \
-    /opt/venv/bin/python -m pip install --upgrade pip && \
-    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+RUN /opt/venv/bin/uv pip install --no-cache -r requirements.txt
 
 
-# Stage 2: The Final Image
+# Stage 2: The Tester
+# This stage builds on the builder and adds test dependencies.
+FROM builder AS tester
+
+WORKDIR /app
+
+# Set the PATH to use the virtual environment's python and packages
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install dev dependencies into the virtual environment
+COPY requirements-dev.txt .
+RUN uv pip install --no-cache -r requirements-dev.txt
+
+# Copy the application and test code
+COPY . .
+
+# Set the command to run tests. PYTHONPATH is needed so pytest can find the module.
+CMD ["/bin/sh", "-c", "PYTHONPATH=. pytest"]
+
+
+# Stage 3: The Final Image
 # This stage copies the pre-built venv, the uv binary, and the app code into a clean image.
 FROM python:3.12-slim
 
@@ -31,11 +49,14 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
 # Copy the application scripts.
-COPY twl_downloader.py entrypoint.sh ./
+COPY twl_downloader.py .
+COPY entrypoint.sh .
 
 # Make the entrypoint script executable.
-RUN chmod +x entrypoint.sh && \
-    useradd --create-home appuser
+RUN chmod +x entrypoint.sh
+
+# Create a non-root user for security.
+RUN useradd --create-home appuser
 USER appuser
 
 # Add the virtual environment's bin directory to the PATH.

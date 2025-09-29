@@ -149,3 +149,11 @@ def test_create_nfo_file(mock_find_video, mocker):
     assert "ToWatchList Comment: A TWL comment." in written_content
     assert "Downloaded on:" in written_content
     assert "<videourl>" not in written_content
+
+
+@patch("twl_downloader.Kodi")
+def test_notify_kodi_is_skipped(mock_kodi):
+    """Test that Kodi notification is skipped if hostname is not set."""
+    config = {"kodi_hostname": None}
+    twl_downloader.notify_kodi(config, scan=True)
+    mock_kodi.assert_not_called()

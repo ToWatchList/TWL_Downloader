@@ -2,10 +2,11 @@
 
 # Define variables
 IMAGE_NAME := towatchlist-downloader
+TEST_IMAGE_NAME := towatchlist-downloader-tester
 ENV_FILE := .env
 
 # Phony targets
-.PHONY: all build run run-local test lint format help
+.PHONY: all build run run-local test test-local lint format help
 
 # Default target
 all: help
@@ -38,9 +39,15 @@ run-local:
 	@set -a && . $(ENV_FILE) && set +a && \
 	python3 twl_downloader.py
 
-# Run the test suite
+# Run the test suite inside a Docker container
 test:
-	@echo "Running tests..."
+	@echo "Building test image and running tests in Docker..."
+	@docker build --target tester -t $(TEST_IMAGE_NAME) .
+	@docker run --rm $(TEST_IMAGE_NAME)
+
+# Run the test suite locally
+test-local:
+	@echo "Running tests locally..."
 	@uv pip install --system -r requirements.txt -r requirements-dev.txt > /dev/null
 	@PYTHONPATH=. pytest
 
@@ -62,6 +69,7 @@ help:
 	@echo "  build      - Build the Docker image"
 	@echo "  run        - Run the application in a Docker container"
 	@echo "  run-local  - Run the application locally"
-	@echo "  test       - Run the test suite"
+	@echo "  test       - Run tests inside a Docker container (recommended)"
+	@echo "  test-local - Run tests on the local machine"
 	@echo "  lint       - Check code for style issues and errors"
 	@echo "  format     - Automatically format the code"

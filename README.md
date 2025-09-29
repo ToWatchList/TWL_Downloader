@@ -8,7 +8,7 @@ This project is designed to be run as a Docker container. It syncs your local vi
 
 -   **Best Quality Downloads**: Automatically downloads the best available video and audio streams and packages them in a high-quality MKV container.
 -   **Embedded Chapters**: Automatically embeds chapters into the video file from both YouTube's native chapters and from SponsorBlock data.
--   **Rich Metadata**: Creates detailed `.nfo` files for media centers like Kodi, including the video description, upload date, and your personal ToWatchList comments.
+-   **Rich Metadata**: Creates detailed, Jellyfin-compliant `.nfo` files for media centers like Kodi, including the video description, upload date, and your personal ToWatchList comments.
 -   **Correct Timestamps**: Sets the final video file's modification date to the video's original upload date, making it easy to sort your library chronologically.
 -   **Cookie Support**: Can use your YouTube cookies to download age-restricted, private, or members-only videos.
 
@@ -28,7 +28,7 @@ Now, edit the `.env` file to add your `TWL_API_KEY`. You can also customize othe
 
 ### 2. Build and Run with Docker
 
-You can build and run the application using the following `make` commands:
+The easiest way to run the application is with the `make` commands:
 
 ```bash
 # Build the Docker image
@@ -38,19 +38,24 @@ make build
 make run
 ```
 
-The `make run` command will mount the `./videos` directory for downloads and the `./config` directory for caching `yt-dlp` updates.
+The `make run` command uses the paths defined in the `Makefile` and the configuration from your `.env` file.
 
-### Using YouTube Cookies
+### Advanced `docker run` Example
 
-To download age-restricted or private videos that require a login, you can provide a cookies file.
+If you prefer to use the `docker run` command directly, you can customize the volume mounts. Here is an example using the specific paths you provided:
 
-1.  Export your YouTube cookies using a browser extension like [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc).
-2.  Save the cookies file as `cookies.txt` in your config directory (the same one you mount to `/config` in the container).
-3.  In your `.env` file, set the `YOUTUBE_COOKIES_FILE` variable to the path *inside the container*:
-    ```
-    YOUTUBE_COOKIES_FILE=/config/cookies.txt
-    ```
-The `make run` command will automatically mount this file into the container.
+```bash
+docker run --rm \
+  --env-file .env \
+  -v "/exos/video/Other/ToWatchList/":/downloads \
+  -v "$HOME/youtube-cookies-for-towatchlist.txt":/config/cookies.txt \
+  --name towatchlist-downloader \
+  towatchlist-downloader
+```
+
+In this example:
+-   Your video download folder `/exos/video/Other/ToWatchList/` is mapped to the `/downloads` directory inside the container.
+-   Your cookies file `~/youtube-cookies-for-towatchlist.txt` is mapped to `/config/cookies.txt` inside the container. Make sure your `.env` file points to this container path: `YOUTUBE_COOKIES_FILE=/config/cookies.txt`.
 
 ### Environment Variables
 
@@ -79,10 +84,16 @@ make run-local
 
 ### Running Tests
 
-The project includes a test suite using `pytest`. To run the tests:
+The recommended way to run tests is inside a clean Docker container:
 
 ```bash
 make test
+```
+
+You can also run the tests directly on your local machine:
+
+```bash
+make test-local
 ```
 
 ### Linting & Formatting
