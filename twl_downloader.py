@@ -37,8 +37,6 @@ def get_config():
     sponsorblock_default = "sponsor,intro,outro,selfpromo,preview,music_offtopic"
     config = {
         "api_key": os.getenv("TWL_API_KEY"),
-        "download_location": os.getenv("TWL_DOWNLOAD_LOCATION", "/downloads"),
-        "tmp_download_location": os.getenv("TWL_TMP_DOWNLOAD_LOCATION"),
         "lookback_days": int(os.getenv("TWL_LOOKBACK_DAYS", "28")),
         "write_nfo_files": os.getenv("TWL_WRITE_NFO_FILES", "true").lower()
         in ("true", "1", "t"),
@@ -109,13 +107,7 @@ def download_video(url, info_dict, config):
     video_id = info_dict.get("id", "UnknownID")
     print(f"Downloading: '{title}' ({url})")
 
-    # Use the temporary location if provided, otherwise download directly.
-    output_path = (
-        config["tmp_download_location"]
-        if config["tmp_download_location"]
-        else config["download_location"]
-    )
-
+    output_path = "/tmp"
     safe_title = "".join(
         c for c in title if c.isalnum() or c in (" ", "-", "_")
     ).rstrip()
@@ -240,11 +232,9 @@ Downloaded on: {datetime.now().strftime("%Y-%m-%d")}
         nfo_file.write(nfo_content)
 
 
-def remove_watched_video(video_id, config):
+def remove_watched_video(video_id):
     """Removes local files for a watched or deleted video."""
-    files_to_remove = get_all_files_for_video_id(
-        video_id, config["download_location"]
-    )
+    files_to_remove = get_all_files_for_video_id(video_id, "/downloads")
     for f in files_to_remove:
         try:
             os.remove(f)
@@ -292,12 +282,11 @@ def notify_kodi(config, scan=False, clean=False):
 def main():
     """Main function to run the sync process."""
     config = get_config()
-    os.makedirs(config["download_location"], exist_ok=True)
-    if config["tmp_download_location"]:
-        os.makedirs(config["tmp_download_location"], exist_ok=True)
+    os.makedirs("/downloads", exist_ok=True)
+    os.makedirs("/tmp", exist_ok=True)
 
     videos = get_videos_from_api(config["api_key"], config["lookback_days"])
-    print(f"Syncing ToWatchList with '{config['download_location']}'")
+    print("Syncing ToWatchList with '/downloads'")
     print(f"Found {len(videos)} videos to process.")
     print("---------------------------------")
 
@@ -310,11 +299,11 @@ def main():
         video_url = mark["source_url"]
 
         if mark.get("watched") or mark.get("delflag"):
-            remove_watched_video(video_id, config)
+            remove_watched_video(video_id)
             should_clean_kodi = True
             continue
 
-        video_file = find_video_file_for_id(video_id, config["download_location"])
+        video_file = find_video_file_for_id(video_id, "/downloads")
         if video_file:
             print(f"Already downloaded: '{mark['title']}'")
         else:
@@ -324,20 +313,16 @@ def main():
 
             download_video(video_url, yt_video_info, config)
 
-            if config["tmp_download_location"]:
-                tmp_dir = config["tmp_download_location"]
-                downloaded_files = get_all_files_for_video_id(video_id, tmp_dir)
-                for f in downloaded_files:
-                    try:
-                        shutil.move(f, config["download_location"])
-                    except shutil.Error as e:
-                        print(
-                            f"WARN: Could not move file {f}. It may already exist. Details: {e}"
-                        )
+            downloaded_files = get_all_files_for_video_id(video_id, "/tmp")
+            for f in downloaded_files:
+                try:
+                    shutil.move(f, "/downloads")
+                except shutil.Error as e:
+                    print(
+                        f"WARN: Could not move file {f}. It may already exist. Details: {e}"
+                    )
 
-            final_video_path = find_video_file_for_id(
-                video_id, config["download_location"]
-            )
+            final_video_path = find_video_file_for_id(video_id, "/downloads")
             set_file_modification_time(final_video_path, yt_video_info)
 
             if config["write_nfo_files"]:

@@ -11,8 +11,6 @@ import twl_downloader
 def mock_env(monkeypatch):
     """Fixture to mock environment variables."""
     monkeypatch.setenv("TWL_API_KEY", "test_api_key")
-    monkeypatch.setenv("TWL_DOWNLOAD_LOCATION", "/test/downloads")
-    monkeypatch.setenv("TWL_TMP_DOWNLOAD_LOCATION", "/test/tmp")
     monkeypatch.setenv("TWL_LOOKBACK_DAYS", "10")
     return monkeypatch
 
@@ -21,13 +19,11 @@ def test_get_config(mock_env):
     """Test that configuration is read correctly from environment variables."""
     config = twl_downloader.get_config()
     assert config["api_key"] == "test_api_key"
-    assert config["download_location"] == "/test/downloads"
-    assert config["tmp_download_location"] == "/test/tmp"
     assert config["lookback_days"] == 10
 
 
 def test_get_videos_from_api_success(mocker):
-    """Test successful API call to fetch videos."""
+    """Test successful API call to fetch videos with custom lookback."""
     mock_response = mocker.MagicMock()
     mock_response.json.return_value = {"marks": ["video1", "video2"]}
     mock_response.raise_for_status.return_value = None
@@ -41,16 +37,13 @@ def test_get_videos_from_api_success(mocker):
 
 
 @patch("twl_downloader.yt_dlp.YoutubeDL")
-def test_download_video_with_tmp_path(mock_yt_dlp, tmp_path):
-    """Test download uses the temporary path when provided."""
+def test_download_uses_hardcoded_tmp_path(mock_yt_dlp):
+    """Test that the download function uses the hardcoded /tmp path."""
     config = {
-        "tmp_download_location": str(tmp_path / "tmp"),
-        "download_location": str(tmp_path / "final"),
         "youtube_cookies_file": None,
         "sponsorblock_categories": [],
     }
     info_dict = {"title": "Test Video", "id": "test_id"}
-
     mock_ydl_instance = MagicMock()
     mock_yt_dlp.return_value.__enter__.return_value = mock_ydl_instance
 
@@ -59,29 +52,7 @@ def test_download_video_with_tmp_path(mock_yt_dlp, tmp_path):
     mock_yt_dlp.assert_called_once()
     args, _ = mock_yt_dlp.call_args
     ydl_opts_passed = args[0]
-    assert str(tmp_path / "tmp") in ydl_opts_passed["outtmpl"]
-
-
-@patch("twl_downloader.yt_dlp.YoutubeDL")
-def test_download_video_direct(mock_yt_dlp, tmp_path):
-    """Test download uses the final path when no temporary path is provided."""
-    config = {
-        "tmp_download_location": None,  # No tmp path
-        "download_location": str(tmp_path / "final"),
-        "youtube_cookies_file": None,
-        "sponsorblock_categories": [],
-    }
-    info_dict = {"title": "Test Video", "id": "test_id"}
-
-    mock_ydl_instance = MagicMock()
-    mock_yt_dlp.return_value.__enter__.return_value = mock_ydl_instance
-
-    twl_downloader.download_video("http://example.com/video", info_dict, config)
-
-    mock_yt_dlp.assert_called_once()
-    args, _ = mock_yt_dlp.call_args
-    ydl_opts_passed = args[0]
-    assert str(tmp_path / "final") in ydl_opts_passed["outtmpl"]
+    assert "/tmp" in ydl_opts_passed["outtmpl"]
 
 
 @patch("os.path.exists", return_value=True)
@@ -90,9 +61,7 @@ def test_set_file_modification_time(mock_utime, mock_exists):
     """Test that file modification time is set correctly."""
     info_dict = {"upload_date": "20230115"}
     video_path = "/downloads/video.mkv"
-
     twl_downloader.set_file_modification_time(video_path, info_dict)
-
     expected_datetime = datetime(2023, 1, 15)
     expected_timestamp = expected_datetime.timestamp()
     mock_utime.assert_called_once_with(
@@ -111,7 +80,6 @@ def test_create_nfo_file(mock_find_video, mocker):
 
     mocker.patch("os.path.exists", side_effect=mock_path_exists)
     mock_open_file = mocker.patch("builtins.open", mocker.mock_open())
-
     twl_video_info = {"Mark": {"comment": "A TWL comment."}}
     yt_video_info = {
         "id": "test_id_123",
@@ -126,14 +94,11 @@ def test_create_nfo_file(mock_find_video, mocker):
         "categories": ["Science & Technology"],
         "tags": ["testing", "python"],
     }
-
     twl_downloader.create_nfo_file(
         "/downloads/test-video.mkv", twl_video_info, yt_video_info
     )
-
     handle = mock_open_file()
     written_content = "".join(call.args[0] for call in handle.write.call_args_list)
-
     assert '<?xml version="1.0" encoding="utf-8" standalone="yes"?>' in written_content
     assert "<title>NFO Test</title>" in written_content
     assert '<uniqueid type="youtube" default="true">test_id_123</uniqueid>' in written_content

@@ -66,6 +66,10 @@ USER appuser
 # This ensures that the script uses the Python and packages from the venv.
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Set container-specific paths, overriding the local defaults.
+ENV TWL_DOWNLOAD_LOCATION="/downloads"
+ENV TWL_TMP_DOWNLOAD_LOCATION="/tmp"
+
 # Define volumes for persistent storage.
 VOLUME ["/downloads", "/config"]
 

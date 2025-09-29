@@ -6,7 +6,7 @@ TEST_IMAGE_NAME := twl-downloader-tester
 ENV_FILE := .env
 
 # Phony targets
-.PHONY: all build run run-local test test-local test-integration test-all lint format help
+.PHONY: all build run test test-local test-integration test-all lint format help
 
 # Default target
 all: help
@@ -26,19 +26,6 @@ run:
 		-v "$(shell pwd)/config":/config \
 		--name $(IMAGE_NAME) \
 		$(IMAGE_NAME)
-
-# Run the application locally
-# Expects a .env file with TWL_API_KEY
-run-local:
-	@echo "Running application locally..."
-	@if ! command -v ffmpeg &> /dev/null; then \
-		echo "ERROR: ffmpeg is not installed. It is required for local integration tests."; \
-		echo "Please install ffmpeg (e.g., 'sudo apt-get install ffmpeg' or 'brew install ffmpeg') and try again."; \
-		exit 1; \
-	fi
-	@uv pip install --system -r requirements.txt > /dev/null
-	@set -a && . $(ENV_FILE) && set +a && \
-	python3 twl_downloader.py
 
 # Run the unit test suite inside a Docker container (fast)
 test:
@@ -89,7 +76,6 @@ help:
 	@echo "Available commands:"
 	@echo "  build            - Build the Docker image"
 	@echo "  run              - Run the application in a Docker container"
-	@echo "  run-local        - Run the application locally"
 	@echo "  test             - Run unit tests inside a Docker container (recommended)"
 	@echo "  test-integration - Run slow integration tests inside a Docker container"
 	@echo "  test-all         - Run all tests inside a Docker container"
