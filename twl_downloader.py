@@ -4,6 +4,7 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+from zoneinfo import ZoneInfo
 
 import requests
 import yt_dlp
@@ -83,9 +84,11 @@ def get_videos_from_api(api_key, lookback_days):
         response.raise_for_status()
         return response.json().get("marks", [])
     except requests.exceptions.RequestException as e:
-        sys.exit(f"ERROR: Failed to fetch data from ToWatchList API: {e}")
+        print(f"ERROR: Failed to fetch data from ToWatchList API: {e}")
+        return []
     except ValueError:
-        sys.exit("ERROR: Failed to parse JSON response from ToWatchList API.")
+        print("ERROR: Failed to parse JSON response from ToWatchList API.")
+        return []
 
 
 def get_video_metadata(url, config):
@@ -188,6 +191,7 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
     print(f"Creating NFO file for: {yt_video_info.get('title')}")
 
     # --- Prepare metadata fields ---
+    video_id = yt_video_info.get('id', '')
     upload_date = yt_video_info.get("upload_date")
     release_date_str = ""
     year_str = ""
@@ -201,42 +205,53 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
 
     download_timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-    plot = f"""{yt_video_info.get('description', '')}
+    # Get current date in Pacific timezone for the ToWatchList comment
+    pacific_tz = ZoneInfo("America/Los_Angeles")
+    downloaded_date = datetime.now(pacific_tz).strftime("%Y-%m-%d")
 
----
-ToWatchList Comment: {strip_tags(twl_video_info['Mark'].get('comment', ''))}
-Downloaded on: {datetime.now().strftime("%Y-%m-%d")}
-"""
+    # Only include ToWatchList comment, not YouTube description
+    twl_comment = strip_tags(twl_video_info['Mark'].get('comment', ''))
+    plot = f"{twl_comment}\n\nDownloaded on: {downloaded_date}"
 
-    genres_xml = "".join(
-        f"<genre>{genre}</genre>\n  "
-        for genre in yt_video_info.get("categories", [])
-    )
-    tags_xml = "".join(
-        f"<tag>{tag}</tag>\n  " for tag in yt_video_info.get("tags", [])
-    )
-
-    # --- Build the NFO XML content ---
-    nfo_content = f"""\
-<?xml version="1.0" encoding="utf-8" standalone="yes"?>
-<episodedetails>
-  <title>{yt_video_info.get('title', '')}</title>
-  <showtitle>{yt_video_info.get('channel', '')}</showtitle>
-  <uniqueid type="youtube" default="true">{yt_video_info.get('id', '')}</uniqueid>
+    # --- Build the NFO XML structure ---
+    tags_xml = "".join([f"<tag>{tag}</tag>" for tag in yt_video_info.get("tags", [])])
+    nfo_content = f"""<?xml version="1.0" encoding="utf-8"?>
+<movie>
+  <title>{yt_video_info.get("title")}</title>
+  <originaltitle>{yt_video_info.get("title")}</originaltitle>
+  <sorttitle>{yt_video_info.get("title")}</sorttitle>
   <year>{year_str}</year>
-  <releasedate>{release_date_str}</releasedate>
-  <dateadded>{download_timestamp_str}</dateadded>
+  <premiered>{release_date_str}T00:00:00</premiered>
+  <filename>{os.path.basename(video_file_path)}</filename>
+  <path>{video_file_path}</path>
   <plot>{plot}</plot>
-  <runtime>{round(yt_video_info.get('duration', 0) / 60.0)}</runtime>
-  <studio>{yt_video_info.get('channel', '')}</studio>
-  <director>{yt_video_info.get('uploader', '')}</director>
-  <thumb aspect="thumb">{yt_video_info.get('thumbnail', '')}</thumb>
-  {genres_xml}
+  <rating>{twl_video_info.get("Mark", {}).get("rating", "0")}</rating>
+  <votes>{twl_video_info.get("Mark", {}).get("votes", "0")}</votes>
+  <mpaa>NR</mpaa>
+  <studio>{yt_video_info.get("uploader")}</studio>
+  <director>{yt_video_info.get("uploader")}</director>
+  <writer>{yt_video_info.get("uploader")}</writer>
+  <actor>
+    <name>{yt_video_info.get("uploader")}</name>
+  </actor>
   {tags_xml}
-</episodedetails>
-"""
-    with open(nfo_file_path, "w", encoding="utf-8") as nfo_file:
-        nfo_file.write(nfo_content)
+  <country>US</country>
+  <language>English</language>
+  <script>UTF-8</script>
+  <releasedate>{release_date_str}</releasedate>
+  <added>{downloaded_date}</added>
+  <lastmodified>{downloaded_date}</lastmodified>
+  <playcount>0</playcount>
+  <id>{video_id}</id>
+</movie>"""
+
+    # --- Write the NFO file ---
+    try:
+        with open(nfo_file_path, "w", encoding="utf-8") as nfo_file:
+            nfo_file.write(nfo_content)
+        print(f"NFO file created: {nfo_file_path}")
+    except Exception as e:
+        print(f"ERROR: Failed to create NFO file. Reason: {e}")
 
 
 def remove_watched_video(video_id, download_location="/downloads"):
@@ -286,16 +301,55 @@ def notify_kodi(config, scan=False, clean=False):
         print(f"ERROR: Could not connect to Kodi. Reason: {e}")
 
 
+def process_video(url, config):
+    """Main processing function for each video."""
+    video_id = url.split("v=")[-1]
+    video_files = get_all_files_for_video_id(video_id, config["download_location"])
+
+    # Check if video is already downloaded
+    video_file = find_video_file_for_id(video_id, config["download_location"])
+    if video_file:
+        print(f"Video already downloaded: {video_file}")
+        return
+
+    # Fetch video metadata from API
+    video_info = None
+    twl_video_info = None
+    try:
+        video_info = get_video_metadata(url, config)
+        twl_video_info = next(
+            (item for item in get_videos_from_api(config["api_key"], config["lookback_days"]) if item["video_id"] == video_id),
+            None
+        )
+    except Exception as e:
+        print(f"ERROR: Failed to fetch video info. Reason: {e}")
+        return
+
+    # Download the video
+    if video_info:
+        download_video(url, video_info, config)
+
+    # Post-processing: Set file modification time and create NFO file
+    if video_file and video_info:
+        set_file_modification_time(video_file, video_info)
+        if config["write_nfo_files"]:
+            create_nfo_file(video_file, twl_video_info, video_info)
+
+
 def main():
-    """Main function to run the sync process."""
     config = get_config()
+    print(f"DEBUG: Configuration loaded. Download location: {config['download_location']}")
+    print(f"DEBUG: Lookback days: {config['lookback_days']}")
+
     download_location = config["download_location"]
     tmp_download_location = config["tmp_download_location"]
-    
+
     os.makedirs(download_location, exist_ok=True)
     os.makedirs(tmp_download_location, exist_ok=True)
 
+    print("DEBUG: Calling get_videos_from_api...")
     videos = get_videos_from_api(config["api_key"], config["lookback_days"])
+    print(f"DEBUG: get_videos_from_api returned. Found {len(videos)} videos to process.")
     print(f"Syncing ToWatchList with '{download_location}'")
     print(f"Found {len(videos)} videos to process.")
     print("---------------------------------")
@@ -304,33 +358,47 @@ def main():
     should_clean_kodi = False
 
     for twl_video_info in videos:
+        print(f"DEBUG: Processing video: {twl_video_info['Mark']['title']}")
         mark = twl_video_info["Mark"]
         video_id = mark["video_id"]
         video_url = mark["source_url"]
+        print(f"DEBUG: Video ID: {video_id}, URL: {video_url}")
 
         if mark.get("watched") or mark.get("delflag"):
+            print(f"DEBUG: Video {video_id} is marked as watched or deleted. Removing...")
             remove_watched_video(video_id, download_location)
             should_clean_kodi = True
             continue
 
         video_file = find_video_file_for_id(video_id, download_location)
         if video_file:
+            print(f"DEBUG: Video {video_id} already downloaded: {video_file}")
             print(f"Already downloaded: '{mark['title']}'")
+
+            # Check if NFO file exists, create it if missing
+            if config["write_nfo_files"]:
+                nfo_file_path = os.path.splitext(video_file)[0] + ".nfo"
+                if not os.path.exists(nfo_file_path):
+                    print(f"DEBUG: NFO file missing for {video_id}, creating it now")
+                    yt_video_info = get_video_metadata(video_url, config)
+                    if yt_video_info:
+                        create_nfo_file(video_file, twl_video_info, yt_video_info)
         else:
+            print(f"DEBUG: Video {video_id} needs to be downloaded")
             yt_video_info = get_video_metadata(video_url, config)
             if not yt_video_info:
+                print(f"DEBUG: Could not get metadata for {video_id}, skipping")
                 continue
 
             download_video(video_url, yt_video_info, config)
 
+            # Move downloaded files from tmp to final location
             downloaded_files = get_all_files_for_video_id(video_id, tmp_download_location)
             for f in downloaded_files:
                 try:
                     shutil.move(f, download_location)
                 except shutil.Error as e:
-                    print(
-                        f"WARN: Could not move file {f}. It may already exist. Details: {e}"
-                    )
+                    print(f"WARN: Could not move file {f}. It may already exist. Details: {e}")
 
             final_video_path = find_video_file_for_id(video_id, download_location)
             set_file_modification_time(final_video_path, yt_video_info)
