@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -r
 # Install dev dependencies into the virtual environment
 COPY requirements-dev.txt .
 RUN uv pip install --python /opt/venv/bin/python --no-cache -r requirements-dev.txt
+RUN uv pip install --python /opt/venv/bin/python --upgrade yt-dlp
 
 # Copy the application and test code
 COPY . .
