@@ -38,6 +38,20 @@ make run
 
 The `make run` command uses the configuration from your `.env` file and mounts local directories for downloads (`./videos`) and configuration (`./config`).
 
+### Using YouTube Cookies
+
+To download age-restricted or private videos that require a login, you can provide a cookies file. This allows `yt-dlp` to make requests as if you were logged into YouTube in your browser.
+
+1.  **Install a Browser Extension**: Use an extension that can export cookies in the `Netscape cookie file` format (a plain text file). The user recommended [cookies.txt](https://github.com/hrdl-github/cookies-txt), which is available for [Chrome](https://chrome.google.com/webstore/detail/cookiestxt/njabckikapfpffapmjgojcnbfjonfjfg) and [Firefox](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/).
+2.  **Export Your Cookies**: Go to `youtube.com` in your browser. Click the extension's icon and then the "Export" or "Download" button to save the `cookies.txt` file.
+3.  **Place the Cookies File**: Move the downloaded `cookies.txt` file into your application's config directory. Using the example path, this would be `/exos/docker-data/config/appdata/twl_downloader/cookies.txt`.
+4.  **Update Your Configuration**: In your `.env` file, set the `YOUTUBE_COOKIES_FILE` variable to point to the location of the file *inside the container*:
+    ```
+    YOUTUBE_COOKIES_FILE=/config/cookies.txt
+    ```
+
+Now, when you run the application, it will automatically use these cookies for YouTube downloads.
+
 ### Path Management
 
 The application uses two important directories inside the container:

@@ -45,6 +45,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install ffmpeg, which is required by yt-dlp for merging formats.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
 # Copy the virtual environment from the builder stage.
 COPY --from=builder /opt/venv /opt/venv
 
@@ -58,20 +61,12 @@ COPY entrypoint.sh .
 # Make the entrypoint script executable.
 RUN chmod +x entrypoint.sh
 
-# Create a non-root user for security.
-RUN useradd --create-home appuser
-USER appuser
-
 # Add the virtual environment's bin directory to the PATH.
 # This ensures that the script uses the Python and packages from the venv.
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Set container-specific paths, overriding the local defaults.
-ENV TWL_DOWNLOAD_LOCATION="/downloads"
-ENV TWL_TMP_DOWNLOAD_LOCATION="/tmp"
-
 # Define volumes for persistent storage.
-VOLUME ["/downloads", "/config"]
+VOLUME ["/downloads", "/config", "/tmp"]
 
 # Set the entrypoint.
 ENTRYPOINT ["./entrypoint.sh"]
