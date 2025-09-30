@@ -9,7 +9,18 @@ from zoneinfo import ZoneInfo
 import requests
 import yt_dlp
 from kodijson import Kodi
+import logging
 
+# Configure logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+# Verify logging is configured correctly
+logging.debug(f"Logging configured with level: {LOG_LEVEL}")
 
 class MLStripper(HTMLParser):
     """A simple HTML parser to strip tags from a string."""
@@ -53,7 +64,8 @@ def get_config():
         "tmp_download_location": os.getenv("TWL_TMP_DOWNLOAD_LOCATION", "/tmp"),
     }
     if not config["api_key"]:
-        sys.exit("ERROR: TWL_API_KEY environment variable not set.")
+        logging.error("TWL_API_KEY environment variable not set.")
+        sys.exit(1)
     return config
 
 
@@ -84,10 +96,10 @@ def get_videos_from_api(api_key, lookback_days):
         response.raise_for_status()
         return response.json().get("marks", [])
     except requests.exceptions.RequestException as e:
-        print(f"ERROR: Failed to fetch data from ToWatchList API: {e}")
+        logging.error(f"Failed to fetch data from ToWatchList API: {e}")
         return []
     except ValueError:
-        print("ERROR: Failed to parse JSON response from ToWatchList API.")
+        logging.error("Failed to parse JSON response from ToWatchList API.")
         return []
 
 
@@ -102,7 +114,7 @@ def get_video_metadata(url, config):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             return ydl.extract_info(url, download=False)
     except Exception as e:
-        print(f"WARNING: Could not fetch metadata for {url}. Reason: {e}")
+        logging.warning(f"Could not fetch metadata for {url}. Reason: {e}")
         return None
 
 
@@ -110,7 +122,7 @@ def download_video(url, info_dict, config):
     """Downloads a single video using yt-dlp."""
     title = info_dict.get("title", "Unknown Title")
     video_id = info_dict.get("id", "UnknownID")
-    print(f"Downloading: '{title}' ({url})")
+    logging.info(f"Downloading: '{title}' ({url})")
 
     # Use tmp_download_location if specified, otherwise use download_location directly
     if config.get("tmp_download_location"):
@@ -159,7 +171,7 @@ def download_video(url, info_dict, config):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except Exception as e:
-        print(f"ERROR: Failed to download '{title}'. Reason: {e}")
+        logging.error(f"Failed to download '{title}'. Reason: {e}")
 
 
 def set_file_modification_time(video_path, info_dict):
@@ -172,11 +184,11 @@ def set_file_modification_time(video_path, info_dict):
             upload_datetime = datetime.strptime(upload_date_str, "%Y%m%d")
             mod_time = upload_datetime.timestamp()
             os.utime(video_path, (mod_time, mod_time))
-            print(
+            logging.info(
                 f"Set modification date for '{os.path.basename(video_path)}' to {upload_datetime.date()}"
             )
         except (ValueError, TypeError):
-            print(f"WARNING: Could not parse upload date '{upload_date_str}'")
+            logging.warning(f"Could not parse upload date '{upload_date_str}'")
 
 
 def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
@@ -188,7 +200,7 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
     if os.path.exists(nfo_file_path):
         return
 
-    print(f"Creating NFO file for: {yt_video_info.get('title')}")
+    logging.info(f"Creating NFO file for: {yt_video_info.get('title')}")
 
     # --- Prepare metadata fields ---
     video_id = yt_video_info.get('id', '')
@@ -249,9 +261,9 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
     try:
         with open(nfo_file_path, "w", encoding="utf-8") as nfo_file:
             nfo_file.write(nfo_content)
-        print(f"NFO file created: {nfo_file_path}")
+        logging.info(f"NFO file created: {nfo_file_path}")
     except Exception as e:
-        print(f"ERROR: Failed to create NFO file. Reason: {e}")
+        logging.error(f"Failed to create NFO file. Reason: {e}")
 
 
 def remove_watched_video(video_id, download_location="/downloads"):
@@ -260,9 +272,9 @@ def remove_watched_video(video_id, download_location="/downloads"):
     for f in files_to_remove:
         try:
             os.remove(f)
-            print(f"Removed watched/deleted file: {os.path.basename(f)}")
+            logging.info(f"Removed watched/deleted file: {os.path.basename(f)}")
         except OSError as e:
-            print(f"ERROR: Could not remove file {f}. Reason: {e}")
+            logging.error(f"Could not remove file {f}. Reason: {e}")
 
 
 def notify_kodi(config, scan=False, clean=False):
@@ -270,7 +282,7 @@ def notify_kodi(config, scan=False, clean=False):
     if not config["kodi_hostname"]:
         return
 
-    print(f"Contacting Kodi at {config['kodi_hostname']}...")
+    logging.info(f"Contacting Kodi at {config['kodi_hostname']}...")
     try:
         kodi = Kodi(
             f"http://{config['kodi_hostname']}:{config['kodi_port']}/jsonrpc",
@@ -278,7 +290,7 @@ def notify_kodi(config, scan=False, clean=False):
             config["kodi_password"],
         )
         if kodi.JSONRPC.Ping()["result"] != "pong":
-            print("ERROR: Bad response from Kodi.")
+            logging.error("Bad response from Kodi.")
             return
 
         if scan or clean:
@@ -289,16 +301,16 @@ def notify_kodi(config, scan=False, clean=False):
                 }
             )
         if scan:
-            print("Scanning Kodi video library...")
+            logging.info("Scanning Kodi video library...")
             kodi.VideoLibrary.Scan()
         if clean:
-            print("Cleaning Kodi video library...")
+            logging.info("Cleaning Kodi video library...")
             kodi.VideoLibrary.Clean()
         if not scan and not clean:
-            print("No Scan or Clean of Kodi needed.")
+            logging.info("No Scan or Clean of Kodi needed.")
 
     except Exception as e:
-        print(f"ERROR: Could not connect to Kodi. Reason: {e}")
+        logging.error(f"Could not connect to Kodi. Reason: {e}")
 
 
 def process_video(url, config):
@@ -309,7 +321,7 @@ def process_video(url, config):
     # Check if video is already downloaded
     video_file = find_video_file_for_id(video_id, config["download_location"])
     if video_file:
-        print(f"Video already downloaded: {video_file}")
+        logging.info(f"Video already downloaded: {video_file}")
         return
 
     # Fetch video metadata from API
@@ -322,7 +334,7 @@ def process_video(url, config):
             None
         )
     except Exception as e:
-        print(f"ERROR: Failed to fetch video info. Reason: {e}")
+        logging.error(f"Failed to fetch video info. Reason: {e}")
         return
 
     # Download the video
@@ -338,8 +350,8 @@ def process_video(url, config):
 
 def main():
     config = get_config()
-    print(f"DEBUG: Configuration loaded. Download location: {config['download_location']}")
-    print(f"DEBUG: Lookback days: {config['lookback_days']}")
+    logging.debug(f"Configuration loaded. Download location: {config['download_location']}")
+    logging.debug(f"Lookback days: {config['lookback_days']}")
 
     download_location = config["download_location"]
     tmp_download_location = config["tmp_download_location"]
@@ -347,47 +359,47 @@ def main():
     os.makedirs(download_location, exist_ok=True)
     os.makedirs(tmp_download_location, exist_ok=True)
 
-    print("DEBUG: Calling get_videos_from_api...")
+    logging.debug("Calling get_videos_from_api...")
     videos = get_videos_from_api(config["api_key"], config["lookback_days"])
-    print(f"DEBUG: get_videos_from_api returned. Found {len(videos)} videos to process.")
-    print(f"Syncing ToWatchList with '{download_location}'")
-    print(f"Found {len(videos)} videos to process.")
-    print("---------------------------------")
+    logging.debug(f"get_videos_from_api returned. Found {len(videos)} videos to process.")
+    logging.info(f"Syncing ToWatchList with '{download_location}'")
+    logging.info(f"Found {len(videos)} videos to process.")
+    logging.info("---------------------------------")
 
     should_scan_kodi = False
     should_clean_kodi = False
 
     for twl_video_info in videos:
-        print(f"DEBUG: Processing video: {twl_video_info['Mark']['title']}")
+        logging.debug(f"Processing video: {twl_video_info['Mark']['title']}")
         mark = twl_video_info["Mark"]
         video_id = mark["video_id"]
         video_url = mark["source_url"]
-        print(f"DEBUG: Video ID: {video_id}, URL: {video_url}")
+        logging.debug(f"Video ID: {video_id}, URL: {video_url}")
 
         if mark.get("watched") or mark.get("delflag"):
-            print(f"DEBUG: Video {video_id} is marked as watched or deleted. Removing...")
+            logging.debug(f"Video {video_id} is marked as watched or deleted. Removing...")
             remove_watched_video(video_id, download_location)
             should_clean_kodi = True
             continue
 
         video_file = find_video_file_for_id(video_id, download_location)
         if video_file:
-            print(f"DEBUG: Video {video_id} already downloaded: {video_file}")
-            print(f"Already downloaded: '{mark['title']}'")
+            logging.debug(f"Video {video_id} already downloaded: {video_file}")
+            logging.info(f"Already downloaded: '{mark['title']}'")
 
             # Check if NFO file exists, create it if missing
             if config["write_nfo_files"]:
                 nfo_file_path = os.path.splitext(video_file)[0] + ".nfo"
                 if not os.path.exists(nfo_file_path):
-                    print(f"DEBUG: NFO file missing for {video_id}, creating it now")
+                    logging.debug(f"NFO file missing for {video_id}, creating it now")
                     yt_video_info = get_video_metadata(video_url, config)
                     if yt_video_info:
                         create_nfo_file(video_file, twl_video_info, yt_video_info)
         else:
-            print(f"DEBUG: Video {video_id} needs to be downloaded")
+            logging.debug(f"Video {video_id} needs to be downloaded")
             yt_video_info = get_video_metadata(video_url, config)
             if not yt_video_info:
-                print(f"DEBUG: Could not get metadata for {video_id}, skipping")
+                logging.debug(f"Could not get metadata for {video_id}, skipping")
                 continue
 
             download_video(video_url, yt_video_info, config)
@@ -398,7 +410,7 @@ def main():
                 try:
                     shutil.move(f, download_location)
                 except shutil.Error as e:
-                    print(f"WARN: Could not move file {f}. It may already exist. Details: {e}")
+                    logging.warning(f"Could not move file {f}. It may already exist. Details: {e}")
 
             final_video_path = find_video_file_for_id(video_id, download_location)
             set_file_modification_time(final_video_path, yt_video_info)
@@ -408,10 +420,10 @@ def main():
 
             should_scan_kodi = True
 
-        print("---------------------------------")
+        logging.info("---------------------------------")
 
     notify_kodi(config, scan=should_scan_kodi, clean=should_clean_kodi)
-    print("Sync complete.")
+    logging.info("Sync complete.")
 
 
 if __name__ == "__main__":
