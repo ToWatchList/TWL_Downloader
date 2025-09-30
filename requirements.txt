@@ -1,4 +1,4 @@
 requests
 kodi-json
-yt-dlp
+yt-dlp[default,curl-cffi]
 pyopenssl
