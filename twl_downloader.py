@@ -144,7 +144,7 @@ def download_video(url, info_dict, config):
         },
         {
             "key": "ModifyChapters",
-            "remove_sponsor_segments": config["sponsorblock_categories"],
+            "remove_sponsor_segments": ["sponsor"],  # Only remove sponsor segments
         },
     ]
 
