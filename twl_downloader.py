@@ -48,6 +48,8 @@ def get_config():
         "sponsorblock_categories": os.getenv(
             "SPONSORBLOCK_CATEGORIES", sponsorblock_default
         ).split(","),
+        "download_location": os.getenv("TWL_DOWNLOAD_LOCATION", "/downloads"),
+        "tmp_download_location": os.getenv("TWL_TMP_DOWNLOAD_LOCATION", "/tmp"),
     }
     if not config["api_key"]:
         sys.exit("ERROR: TWL_API_KEY environment variable not set.")
@@ -107,7 +109,12 @@ def download_video(url, info_dict, config):
     video_id = info_dict.get("id", "UnknownID")
     print(f"Downloading: '{title}' ({url})")
 
-    output_path = "/tmp"
+    # Use tmp_download_location if specified, otherwise use download_location directly
+    if config.get("tmp_download_location"):
+        output_path = config["tmp_download_location"]
+    else:
+        output_path = config.get("download_location", "/tmp")
+
     safe_title = "".join(
         c for c in title if c.isalnum() or c in (" ", "-", "_")
     ).rstrip()
@@ -232,9 +239,9 @@ Downloaded on: {datetime.now().strftime("%Y-%m-%d")}
         nfo_file.write(nfo_content)
 
 
-def remove_watched_video(video_id):
+def remove_watched_video(video_id, download_location="/downloads"):
     """Removes local files for a watched or deleted video."""
-    files_to_remove = get_all_files_for_video_id(video_id, "/downloads")
+    files_to_remove = get_all_files_for_video_id(video_id, download_location)
     for f in files_to_remove:
         try:
             os.remove(f)
@@ -282,11 +289,14 @@ def notify_kodi(config, scan=False, clean=False):
 def main():
     """Main function to run the sync process."""
     config = get_config()
-    os.makedirs("/downloads", exist_ok=True)
-    os.makedirs("/tmp", exist_ok=True)
+    download_location = config["download_location"]
+    tmp_download_location = config["tmp_download_location"]
+    
+    os.makedirs(download_location, exist_ok=True)
+    os.makedirs(tmp_download_location, exist_ok=True)
 
     videos = get_videos_from_api(config["api_key"], config["lookback_days"])
-    print("Syncing ToWatchList with '/downloads'")
+    print(f"Syncing ToWatchList with '{download_location}'")
     print(f"Found {len(videos)} videos to process.")
     print("---------------------------------")
 
@@ -299,11 +309,11 @@ def main():
         video_url = mark["source_url"]
 
         if mark.get("watched") or mark.get("delflag"):
-            remove_watched_video(video_id)
+            remove_watched_video(video_id, download_location)
             should_clean_kodi = True
             continue
 
-        video_file = find_video_file_for_id(video_id, "/downloads")
+        video_file = find_video_file_for_id(video_id, download_location)
         if video_file:
             print(f"Already downloaded: '{mark['title']}'")
         else:
@@ -313,16 +323,16 @@ def main():
 
             download_video(video_url, yt_video_info, config)
 
-            downloaded_files = get_all_files_for_video_id(video_id, "/tmp")
+            downloaded_files = get_all_files_for_video_id(video_id, tmp_download_location)
             for f in downloaded_files:
                 try:
-                    shutil.move(f, "/downloads")
+                    shutil.move(f, download_location)
                 except shutil.Error as e:
                     print(
                         f"WARN: Could not move file {f}. It may already exist. Details: {e}"
                     )
 
-            final_video_path = find_video_file_for_id(video_id, "/downloads")
+            final_video_path = find_video_file_for_id(video_id, download_location)
             set_file_modification_time(final_video_path, yt_video_info)
 
             if config["write_nfo_files"]:

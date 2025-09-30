@@ -20,15 +20,12 @@ RUN uv pip install --python /opt/venv/bin/python --no-cache -r requirements.txt
 # This stage builds on the builder and adds test dependencies and ffmpeg.
 FROM builder AS tester
 
-WORKDIR /app
-
 # Install ffmpeg for video analysis in tests
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Install dev dependencies into the virtual environment
 COPY requirements-dev.txt .
 RUN uv pip install --python /opt/venv/bin/python --no-cache -r requirements-dev.txt
-RUN uv pip install --python /opt/venv/bin/python --upgrade yt-dlp
 
 # Copy the application and test code
 COPY . .
@@ -56,11 +53,7 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
 # Copy the application scripts.
-COPY twl_downloader.py .
-COPY entrypoint.sh .
-
-# Make the entrypoint script executable.
-RUN chmod +x entrypoint.sh
+COPY twl_downloader.py entrypoint.sh ./
 
 # Add the virtual environment's bin directory to the PATH.
 # This ensures that the script uses the Python and packages from the venv.

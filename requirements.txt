@@ -1,5 +1,4 @@
 requests
 kodi-json
 yt-dlp
-brotli
 pyopenssl
