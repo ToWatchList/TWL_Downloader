@@ -75,6 +75,8 @@ def get_config():
         "tmp_download_location": os.getenv("TWL_TMP_DOWNLOAD_LOCATION", "/tmp"),
         # New: whether to just reprocess existing files (update/create NFOs) instead of re-downloading
         "reprocess_existing": os.getenv("REPROCESS_EXISTING", "false").lower() in ("true", "1", "t"),
+        # New: whether to skip tallscreen videos (height > width)
+        "skip_tallscreen_videos": os.getenv("SKIP_TALLSCREEN_VIDEOS", "false").lower() in ("true", "1", "t"),
     }
     if not config["api_key"]:
         logging.error("TWL_API_KEY environment variable not set.")
@@ -198,6 +200,26 @@ def get_video_metadata(url, config):
     except Exception as e:
         logging.warning(f"Could not fetch metadata for {url}. Reason: {e}")
         return None
+
+
+def is_tallscreen_video(info_dict):
+    """Checks if a video is tallscreen (height > width)."""
+    if not info_dict:
+        return False
+
+    height = info_dict.get("height")
+    width = info_dict.get("width")
+
+    if height and width:
+        is_tallscreen = height > width
+        if is_tallscreen:
+            logging.debug(f"Video dimensions: {width}x{height} (tallscreen)")
+        else:
+            logging.debug(f"Video dimensions: {width}x{height}")
+        return is_tallscreen
+
+    logging.debug("Video dimensions not available in metadata")
+    return False
 
 
 def download_video(url, info_dict, config):
@@ -538,6 +560,12 @@ def main():
 
             if not yt_video_info:
                 logging.debug(f"Could not get metadata for {video_id}, skipping")
+                continue
+
+            # Check if video is tallscreen and should be skipped
+            if config["skip_tallscreen_videos"] and is_tallscreen_video(yt_video_info):
+                logging.info(f"Skipping tallscreen video: '{mark['title']}' (height > width)")
+                logging.info("---------------------------------")
                 continue
 
             try:

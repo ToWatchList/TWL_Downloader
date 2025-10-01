@@ -79,6 +79,22 @@ ERROR: Skipping video due to DRM/SABR protection: Cannot guarantee best quality 
 
 This feature ensures you never unknowingly download a low-quality version when a high-quality version should be available.
 
+### Filtering Tallscreen Videos
+
+By default, the downloader will process all videos regardless of their aspect ratio. However, if you want to skip portrait/vertical videos (where the height is greater than the width), you can enable the tallscreen filter:
+
+```bash
+SKIP_TALLSCREEN_VIDEOS=true
+```
+
+When enabled, the downloader will:
+
+1.  **Check Dimensions**: Examine the video's width and height from the metadata.
+2.  **Skip Tallscreen Videos**: If height > width, the video will be skipped and not downloaded.
+3.  **Log the Action**: You'll see a message like: `Skipping tallscreen video: 'Video Title' (height > width)`
+
+This is useful if you primarily watch videos on landscape displays and want to automatically filter out portrait-oriented content like TikTok videos, Instagram Reels, or YouTube Shorts that were filmed vertically.
+
 ### Path Management
 
 The application uses two important directories inside the container:
@@ -108,6 +124,7 @@ docker run --rm \
 | `TWL_LOOKBACK_DAYS`         | Number of days to look back for new videos.                                    | `28`                                                     |
 | `YOUTUBE_COOKIES_FILE`      | Optional. Path inside the container to a YouTube cookies file.                 | (none)                                                   |
 | `TWL_WRITE_NFO_FILES`       | Set to `true` to generate `.nfo` metadata files for Kodi.                      | `true`                                                   |
+| `SKIP_TALLSCREEN_VIDEOS`    | Set to `true` to skip downloading videos where height > width (portrait).      | `false`                                                  |
 | `SPONSORBLOCK_CATEGORIES`   | Comma-separated list of SponsorBlock categories to mark as chapters.           | `sponsor,intro,outro,selfpromo,preview,music_offtopic`   |
 | `TWL_KODI_HOSTNAME`         | The hostname or IP address of your Kodi instance.                              | (none)                                                   |
 | `TWL_KODI_PORT`             | The port for Kodi's web interface.                                             | `8080`                                                   |
