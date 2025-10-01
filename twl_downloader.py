@@ -22,6 +22,18 @@ logging.basicConfig(
 # Verify logging is configured correctly
 logging.debug(f"Logging configured with level: {LOG_LEVEL}")
 
+
+# Custom exceptions
+class DownloadError(Exception):
+    """Custom exception for download errors"""
+    pass
+
+
+class DRMProtectionError(DownloadError):
+    """Raised when DRM protection prevents downloading best quality"""
+    pass
+
+
 class MLStripper(HTMLParser):
     """A simple HTML parser to strip tags from a string."""
 
@@ -106,25 +118,97 @@ def get_videos_from_api(api_key, lookback_days):
 
 def get_video_metadata(url, config):
     """Fetches video metadata using yt-dlp without downloading."""
-    ydl_opts = {"quiet": True, "skip_download": True}
-    if config["youtube_cookies_file"] and os.path.isfile(
-        config["youtube_cookies_file"]
-    ):
+    warning_messages = []
+    
+    class WarningLogger:
+        def debug(self, msg):
+            logging.debug(msg)
+        def warning(self, msg):
+            warning_messages.append(msg)
+            logging.warning(msg)
+        def error(self, msg):
+            warning_messages.append(msg)
+            logging.error(msg)
+        def info(self, msg):
+            logging.info(msg)
+    
+    ydl_opts = {
+        "quiet": False,
+        "skip_download": True,
+        "logger": WarningLogger(),
+    }
+    
+    # Try with cookies first
+    use_cookies = config["youtube_cookies_file"] and os.path.isfile(config["youtube_cookies_file"])
+    if use_cookies:
         ydl_opts["cookiefile"] = config["youtube_cookies_file"]
+    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            return ydl.extract_info(url, download=False)
+            info = ydl.extract_info(url, download=False)
+        
+        # Check for DRM/SABR warnings
+        drm_sabr_detected = any(
+            'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg
+            for msg in warning_messages
+        )
+        
+        if drm_sabr_detected:
+            if use_cookies:
+                # Retry without cookies
+                logging.warning(f"DRM/SABR detected with cookies, retrying without cookies for {url}")
+                warning_messages.clear()
+                ydl_opts_no_cookies = {
+                    "quiet": False,
+                    "skip_download": True,
+                    "logger": WarningLogger(),
+                }
+                with yt_dlp.YoutubeDL(ydl_opts_no_cookies) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                
+                # Check again for DRM/SABR
+                drm_sabr_still_detected = any(
+                    'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg
+                    for msg in warning_messages
+                )
+                
+                if drm_sabr_still_detected:
+                    error_msg = f"DRM/SABR protection detected for {url} even without cookies. Cannot guarantee best quality download.\n"
+                    error_msg += "Warnings detected:\n"
+                    for msg in warning_messages:
+                        if 'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg:
+                            error_msg += f"  - {msg}\n"
+                    raise DRMProtectionError(error_msg)
+                else:
+                    logging.info(f"Successfully bypassed DRM/SABR by removing cookies for {url}")
+                    # Mark that we should download without cookies
+                    info['_no_cookies'] = True
+                    return info
+            else:
+                error_msg = f"DRM/SABR protection detected for {url}. Cannot guarantee best quality download.\n"
+                error_msg += "Warnings detected:\n"
+                for msg in warning_messages:
+                    if 'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg:
+                        error_msg += f"  - {msg}\n"
+                raise DRMProtectionError(error_msg)
+        
+        return info
+    except DRMProtectionError:
+        raise  # Re-raise DRM errors
     except Exception as e:
         logging.warning(f"Could not fetch metadata for {url}. Reason: {e}")
         return None
 
 
 def download_video(url, info_dict, config):
-    """Downloads a single video using yt-dlp."""
+    """Downloads a single video using yt-dlp with DRM/SABR protection detection."""
     title = info_dict.get("title", "Unknown Title")
     video_id = info_dict.get("id", "UnknownID")
     logging.info(f"Downloading: '{title}' ({url})")
 
+    # Check if we should skip cookies (set by get_video_metadata when DRM/SABR was bypassed)
+    skip_cookies = info_dict.get('_no_cookies', False)
+    
     # Use tmp_download_location if specified, otherwise use download_location directly
     if config.get("tmp_download_location"):
         output_path = config["tmp_download_location"]
@@ -149,6 +233,7 @@ def download_video(url, info_dict, config):
         },
     ]
 
+    # Accept webm format if needed to bypass DRM/SABR
     ydl_format = "bestvideo+bestaudio/best"
 
     ydl_opts = {
@@ -163,16 +248,19 @@ def download_video(url, info_dict, config):
         "postprocessors": postprocessors,
     }
 
-    if config["youtube_cookies_file"] and os.path.isfile(
-        config["youtube_cookies_file"]
-    ):
+    # Only use cookies if we didn't detect DRM/SABR issues
+    if not skip_cookies and config["youtube_cookies_file"] and os.path.isfile(config["youtube_cookies_file"]):
         ydl_opts["cookiefile"] = config["youtube_cookies_file"]
+        logging.debug(f"Using cookies for download: {config['youtube_cookies_file']}")
+    elif skip_cookies:
+        logging.info(f"Downloading without cookies to bypass DRM/SABR protection")
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except Exception as e:
         logging.error(f"Failed to download '{title}'. Reason: {e}")
+        raise DownloadError(f"Failed to download: {e}")
 
 
 def set_file_modification_time(video_path, info_dict):
@@ -386,7 +474,13 @@ def main():
         # New preprocessing: if configured, look for any files matching '*{video_id}*' and update/create NFOs
         if config.get("reprocess_existing"):
             logging.debug(f"REPROCESS_EXISTING enabled: looking for files matching '*{video_id}*' in {download_location}")
-            yt_video_info = get_video_metadata(video_url, config)
+            try:
+                yt_video_info = get_video_metadata(video_url, config)
+            except DRMProtectionError as e:
+                logging.error(f"Skipping video {video_id} due to DRM/SABR protection during metadata fetch: {e}")
+                logging.info("---------------------------------")
+                continue
+            
             if not yt_video_info:
                 logging.debug(f"Could not get metadata for {video_id}; skipping reprocess step.")
             else:
@@ -425,17 +519,37 @@ def main():
                 nfo_file_path = os.path.splitext(video_file)[0] + ".nfo"
                 if not os.path.exists(nfo_file_path):
                     logging.debug(f"NFO file missing for {video_id}, creating it now")
-                    yt_video_info = get_video_metadata(video_url, config)
+                    try:
+                        yt_video_info = get_video_metadata(video_url, config)
+                    except DRMProtectionError as e:
+                        logging.warning(f"Cannot create NFO for {video_id} due to DRM/SABR protection: {e}")
+                        yt_video_info = None
+                    
                     if yt_video_info:
                         create_nfo_file(video_file, twl_video_info, yt_video_info)
         else:
             logging.debug(f"Video {video_id} needs to be downloaded")
-            yt_video_info = get_video_metadata(video_url, config)
+            try:
+                yt_video_info = get_video_metadata(video_url, config)
+            except DRMProtectionError as e:
+                logging.error(f"Skipping video {video_id} due to DRM/SABR protection: {e}")
+                logging.info("---------------------------------")
+                continue
+            
             if not yt_video_info:
                 logging.debug(f"Could not get metadata for {video_id}, skipping")
                 continue
 
-            download_video(video_url, yt_video_info, config)
+            try:
+                download_video(video_url, yt_video_info, config)
+            except DRMProtectionError as e:
+                logging.error(f"Skipping video {video_id} due to DRM/SABR protection: {e}")
+                logging.info("---------------------------------")
+                continue
+            except DownloadError as e:
+                logging.error(f"Failed to download video {video_id}: {e}")
+                logging.info("---------------------------------")
+                continue
 
             # Move downloaded files from tmp to final location
             downloaded_files = get_all_files_for_video_id(video_id, tmp_download_location)
