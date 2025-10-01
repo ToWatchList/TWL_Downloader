@@ -7,6 +7,7 @@ This project is designed to be run as a Docker container. It syncs your local vi
 ## Key Features
 
 -   **Best Quality Downloads**: Automatically downloads the best available video and audio streams and packages them in a high-quality MKV container.
+-   **DRM/SABR Protection Handling**: Automatically detects when YouTube applies DRM protection or SABR streaming restrictions (which can limit quality) and retries the download without cookies to obtain the best available quality. If the best quality still cannot be obtained, the download is skipped rather than downloading a degraded version.
 -   **Embedded Chapters**: Automatically embeds chapters into the video file from both YouTube's native chapters and from SponsorBlock data.
 -   **Rich Metadata**: Creates detailed, Jellyfin-compliant `.nfo` files for media centers like Kodi, including the video description, upload date, and your personal ToWatchList comments.
 -   **Correct Timestamps**: Sets the final video file's modification date to the video's original upload date, making it easy to sort your library chronologically.
@@ -51,6 +52,32 @@ To download age-restricted or private videos that require a login, you can provi
     ```
 
 Now, when you run the application, it will automatically use these cookies for YouTube downloads.
+
+### Handling DRM and SABR Protection
+
+YouTube sometimes applies DRM (Digital Rights Management) protection or forces SABR (Streaming Audio/Video Bitrate Reduction) streaming on certain videos, especially when using cookies or certain client types. This can prevent access to the highest quality formats (like 4K).
+
+The downloader automatically handles this situation:
+
+1.  **Detection**: When DRM/SABR warnings are detected during the initial metadata fetch, the script recognizes that the best quality may not be available.
+2.  **Automatic Retry**: The script automatically retries the download *without* cookies, which often bypasses these restrictions and allows access to higher quality formats.
+3.  **Quality Guarantee**: If the best quality still cannot be obtained after the retry, the download is **skipped entirely** rather than downloading a degraded version. This ensures your library only contains the highest quality videos available.
+
+You'll see log messages like this when DRM/SABR protection is detected and handled:
+
+```
+WARNING: [youtube] Some tv client https formats have been skipped as they are DRM protected
+INFO: Retrying download without cookies to bypass DRM/SABR restrictions...
+INFO: Successfully downloaded without cookies
+```
+
+If the video cannot be downloaded in acceptable quality even without cookies, you'll see:
+
+```
+ERROR: Skipping video due to DRM/SABR protection: Cannot guarantee best quality download
+```
+
+This feature ensures you never unknowingly download a low-quality version when a high-quality version should be available.
 
 ### Path Management
 

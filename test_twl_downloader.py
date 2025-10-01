@@ -99,11 +99,11 @@ def test_create_nfo_file(mock_find_video, mocker):
     )
     handle = mock_open_file()
     written_content = "".join(call.args[0] for call in handle.write.call_args_list)
-    assert '<?xml version="1.0" encoding="utf-8" standalone="yes"?>' in written_content
+    assert '<?xml version="1.0" encoding="utf-8"?>' in written_content
     assert "<title>NFO Test</title>" in written_content
-    assert '<uniqueid type="youtube" default="true">test_id_123</uniqueid>' in written_content
+    assert '<id>test_id_123</id>' in written_content
     assert "<releasedate>2023-01-15</releasedate>" in written_content
-    assert "<dateadded>" in written_content
+    assert "<added>" in written_content
 
 
 @patch("twl_downloader.Kodi")
@@ -112,3 +112,72 @@ def test_notify_kodi_is_skipped(mock_kodi):
     config = {"kodi_hostname": None}
     twl_downloader.notify_kodi(config, scan=True)
     mock_kodi.assert_not_called()
+
+
+@patch("twl_downloader.yt_dlp.YoutubeDL")
+@patch("os.path.isfile")
+def test_drm_sabr_retry_without_cookies(mock_isfile, mock_yt_dlp):
+    """Test that DRM/SABR protection triggers retry without cookies."""
+    # Mock that cookies file exists
+    mock_isfile.return_value = True
+
+    config = {
+        "youtube_cookies_file": "/config/cookies.txt",
+        "sponsorblock_categories": [],
+        "tmp_download_location": "/tmp",
+    }
+
+    drm_warning = "[youtube] test_id: Some tv client https formats have been skipped as they are DRM protected"
+    sabr_warning = "[youtube] test_id: Some web client https formats have been skipped as they are missing a url. YouTube is forcing SABR streaming"
+
+    call_count = 0
+
+    def create_mock_ydl(opts):
+        nonlocal call_count
+        call_count += 1
+
+        mock_instance = MagicMock()
+        mock_context = MagicMock()
+
+        # First call with cookies - trigger DRM/SABR warnings
+        if call_count == 1 and 'cookiefile' in opts:
+            if 'logger' in opts:
+                opts['logger'].warning(drm_warning)
+                opts['logger'].warning(sabr_warning)
+            mock_context.extract_info.return_value = {
+                "title": "Test Video",
+                "id": "test_id",
+                "upload_date": "20230115"
+            }
+        # Second call without cookies - succeeds
+        else:
+            mock_context.extract_info.return_value = {
+                "title": "Test Video",
+                "id": "test_id",
+                "upload_date": "20230115",
+                "_no_cookies": True
+            }
+
+        mock_instance.__enter__.return_value = mock_context
+        mock_instance.__exit__.return_value = None
+        return mock_instance
+
+    mock_yt_dlp.side_effect = create_mock_ydl
+
+    # Test get_video_metadata which should retry without cookies
+    result = twl_downloader.get_video_metadata("http://example.com/video", config)
+
+    # Should have been called twice (once with cookies, once without)
+    assert mock_yt_dlp.call_count == 2
+
+    # First call should have cookies
+    first_call_opts = mock_yt_dlp.call_args_list[0][0][0]
+    assert 'cookiefile' in first_call_opts
+
+    # Second call should NOT have cookies
+    second_call_opts = mock_yt_dlp.call_args_list[1][0][0]
+    assert 'cookiefile' not in second_call_opts
+
+    # Result should indicate no cookies were used
+    assert result is not None
+    assert result.get('_no_cookies') == True
