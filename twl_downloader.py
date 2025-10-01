@@ -50,8 +50,7 @@ def get_config():
     config = {
         "api_key": os.getenv("TWL_API_KEY"),
         "lookback_days": int(os.getenv("TWL_LOOKBACK_DAYS", "28")),
-        "write_nfo_files": os.getenv("TWL_WRITE_NFO_FILES", "true").lower()
-        in ("true", "1", "t"),
+        "write_nfo_files": os.getenv("TWL_WRITE_NFO_FILES", "true").lower() in ("true", "1", "t"),
         "kodi_hostname": os.getenv("TWL_KODI_HOSTNAME"),
         "kodi_port": int(os.getenv("TWL_KODI_PORT", "8080")),
         "kodi_user": os.getenv("TWL_KODI_USER"),
@@ -62,6 +61,8 @@ def get_config():
         ).split(","),
         "download_location": os.getenv("TWL_DOWNLOAD_LOCATION", "/downloads"),
         "tmp_download_location": os.getenv("TWL_TMP_DOWNLOAD_LOCATION", "/tmp"),
+        # New: whether to just reprocess existing files (update/create NFOs) instead of re-downloading
+        "reprocess_existing": os.getenv("REPROCESS_EXISTING", "false").lower() in ("true", "1", "t"),
     }
     if not config["api_key"]:
         logging.error("TWL_API_KEY environment variable not set.")
@@ -184,7 +185,7 @@ def set_file_modification_time(video_path, info_dict):
             upload_datetime = datetime.strptime(upload_date_str, "%Y%m%d")
             mod_time = upload_datetime.timestamp()
             os.utime(video_path, (mod_time, mod_time))
-            logging.info(
+            logging.debug(
                 f"Set modification date for '{os.path.basename(video_path)}' to {upload_datetime.date()}"
             )
         except (ValueError, TypeError):
@@ -200,7 +201,7 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
     if os.path.exists(nfo_file_path):
         return
 
-    logging.info(f"Creating NFO file for: {yt_video_info.get('title')}")
+    logging.debug(f"Creating NFO file for: {yt_video_info.get('title')}")
 
     # --- Prepare metadata fields ---
     video_id = yt_video_info.get('id', '')
@@ -313,6 +314,12 @@ def notify_kodi(config, scan=False, clean=False):
         logging.error(f"Could not connect to Kodi. Reason: {e}")
 
 
+def get_files_matching_video_id(video_id, download_dir):
+    """Finds any files in download_dir that contain the video_id in their filename (glob '*video_id*')."""
+    pattern = os.path.join(download_dir, f"*{video_id}*")
+    return glob.glob(pattern)
+
+
 def process_video(url, config):
     """Main processing function for each video."""
     video_id = url.split("v=")[-1]
@@ -375,6 +382,32 @@ def main():
         video_id = mark["video_id"]
         video_url = mark["source_url"]
         logging.debug(f"Video ID: {video_id}, URL: {video_url}")
+
+        # New preprocessing: if configured, look for any files matching '*{video_id}*' and update/create NFOs
+        if config.get("reprocess_existing"):
+            logging.debug(f"REPROCESS_EXISTING enabled: looking for files matching '*{video_id}*' in {download_location}")
+            yt_video_info = get_video_metadata(video_url, config)
+            if not yt_video_info:
+                logging.debug(f"Could not get metadata for {video_id}; skipping reprocess step.")
+            else:
+                matching_files = get_files_matching_video_id(video_id, download_location)
+                if matching_files:
+                    logging.info(f"Found {len(matching_files)} existing file(s) for {video_id}; updating NFOs if needed.")
+                    video_exts = {"mkv", "mp4", "webm", "mov", "flv", "avi"}
+                    nfo_updated = False
+                    for f in matching_files:
+                        ext = os.path.splitext(f)[1].lstrip('.').lower()
+                        # Only treat likely video files for NFO creation
+                        if ext in video_exts:
+                            if config["write_nfo_files"]:
+                                create_nfo_file(f, twl_video_info, yt_video_info)
+                                nfo_updated = True
+                    if nfo_updated:
+                        should_scan_kodi = True
+                    # We've handled existing files; skip download step for this video
+                    logging.info(f"Reprocess complete for {video_id}; skipping download.")
+                    logging.info("---------------------------------")
+                    continue
 
         if mark.get("watched") or mark.get("delflag"):
             logging.debug(f"Video {video_id} is marked as watched or deleted. Removing...")
