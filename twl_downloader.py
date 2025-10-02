@@ -56,6 +56,41 @@ def strip_tags(html):
     return s.get_data()
 
 
+def load_tallscreen_cache(download_location):
+    """Loads the set of tallscreen video IDs from the cache file."""
+    cache_file = os.path.join(download_location, ".yttallscreen")
+    if not os.path.exists(cache_file):
+        return set()
+
+    try:
+        with open(cache_file, "r") as f:
+            return set(line.strip() for line in f if line.strip())
+    except Exception as e:
+        logging.warning(f"Could not read tallscreen cache: {e}")
+        return set()
+
+
+def save_tallscreen_cache(download_location, video_ids):
+    """Saves the set of tallscreen video IDs to the cache file."""
+    cache_file = os.path.join(download_location, ".yttallscreen")
+    try:
+        with open(cache_file, "w") as f:
+            for video_id in sorted(video_ids):
+                f.write(f"{video_id}\n")
+        logging.debug(f"Saved {len(video_ids)} tallscreen video IDs to cache")
+    except Exception as e:
+        logging.error(f"Could not write tallscreen cache: {e}")
+
+
+def add_to_tallscreen_cache(download_location, video_id):
+    """Adds a video ID to the tallscreen cache."""
+    cache = load_tallscreen_cache(download_location)
+    if video_id not in cache:
+        cache.add(video_id)
+        save_tallscreen_cache(download_location, cache)
+        logging.debug(f"Added {video_id} to tallscreen cache")
+
+
 def get_config():
     """Reads configuration from environment variables."""
     sponsorblock_default = "sponsor,intro,outro,selfpromo,preview,music_offtopic"
@@ -175,28 +210,32 @@ def get_video_metadata(url, config):
                 )
 
                 if drm_sabr_still_detected:
-                    error_msg = f"DRM/SABR protection detected for {url} even without cookies. Cannot guarantee best quality download.\n"
-                    error_msg += "Warnings detected:\n"
+                    # Instead of raising an exception, log warning and return metadata with flag
+                    logging.warning(f"DRM/SABR protection detected for {url} even without cookies. Cannot guarantee best quality download.")
                     for msg in warning_messages:
                         if 'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg:
-                            error_msg += f"  - {msg}\n"
-                    raise DRMProtectionError(error_msg)
+                            logging.warning(f"  - {msg}")
+                    # Mark that DRM/SABR was detected but still return the metadata
+                    info['_drm_sabr_detected'] = True
+                    return info
                 else:
                     logging.info(f"Successfully bypassed DRM/SABR by removing cookies for {url}")
                     # Mark that we should download without cookies
                     info['_no_cookies'] = True
                     return info
             else:
-                error_msg = f"DRM/SABR protection detected for {url}. Cannot guarantee best quality download.\n"
-                error_msg += "Warnings detected:\n"
+                # Instead of raising an exception, log warning and return metadata with flag
+                logging.warning(f"DRM/SABR protection detected for {url}. Cannot guarantee best quality download.")
                 for msg in warning_messages:
                     if 'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg:
-                        error_msg += f"  - {msg}\n"
-                raise DRMProtectionError(error_msg)
+                        logging.warning(f"  - {msg}")
+                # Mark that DRM/SABR was detected but still return the metadata
+                info['_drm_sabr_detected'] = True
+                return info
 
         return info
     except DRMProtectionError:
-        raise  # Re-raise DRM errors
+        raise  # Re-raise DRM errors (though we shouldn't hit this anymore)
     except Exception as e:
         logging.warning(f"Could not fetch metadata for {url}. Reason: {e}")
         return None
@@ -226,6 +265,12 @@ def download_video(url, info_dict, config):
     """Downloads a single video using yt-dlp with DRM/SABR protection detection."""
     title = info_dict.get("title", "Unknown Title")
     video_id = info_dict.get("id", "UnknownID")
+
+    # Check if DRM/SABR was detected during metadata fetch
+    if info_dict.get('_drm_sabr_detected'):
+        logging.error(f"Skipping download of '{title}' due to DRM/SABR protection. Metadata was captured but download cannot proceed.")
+        raise DRMProtectionError(f"DRM/SABR protection prevents downloading: {title}")
+
     logging.info(f"Downloading: '{title}' ({url})")
 
     # Check if we should skip cookies (set by get_video_metadata when DRM/SABR was bypassed)
@@ -476,6 +521,11 @@ def main():
     os.makedirs(download_location, exist_ok=True)
     os.makedirs(tmp_download_location, exist_ok=True)
 
+    # Load tallscreen cache
+    tallscreen_cache = load_tallscreen_cache(download_location)
+    if tallscreen_cache:
+        logging.debug(f"Loaded {len(tallscreen_cache)} tallscreen video IDs from cache")
+
     logging.debug("Calling get_videos_from_api...")
     videos = get_videos_from_api(config["api_key"], config["lookback_days"])
     logging.debug(f"get_videos_from_api returned. Found {len(videos)} videos to process.")
@@ -493,6 +543,12 @@ def main():
         video_url = mark["source_url"]
         logging.debug(f"Video ID: {video_id}, URL: {video_url}")
 
+        # Check tallscreen cache early if skip_tallscreen_videos is enabled
+        if config["skip_tallscreen_videos"] and video_id in tallscreen_cache:
+            logging.info(f"Skipping cached tallscreen video: '{mark['title']}' (from cache)")
+            logging.info("---------------------------------")
+            continue
+
         # New preprocessing: if configured, look for any files matching '*{video_id}*' and update/create NFOs
         if config.get("reprocess_existing"):
             logging.debug(f"REPROCESS_EXISTING enabled: looking for files matching '*{video_id}*' in {download_location}")
@@ -506,6 +562,15 @@ def main():
             if not yt_video_info:
                 logging.debug(f"Could not get metadata for {video_id}; skipping reprocess step.")
             else:
+                # Check if it's tallscreen and add to cache if needed
+                if config["skip_tallscreen_videos"] and is_tallscreen_video(yt_video_info):
+                    if video_id not in tallscreen_cache:
+                        add_to_tallscreen_cache(download_location, video_id)
+                        tallscreen_cache.add(video_id)
+                    logging.info(f"Skipping tallscreen video: '{mark['title']}' (height > width, added to cache)")
+                    logging.info("---------------------------------")
+                    continue
+
                 matching_files = get_files_matching_video_id(video_id, download_location)
                 if matching_files:
                     logging.info(f"Found {len(matching_files)} existing file(s) for {video_id}; updating NFOs if needed.")
@@ -564,7 +629,10 @@ def main():
 
             # Check if video is tallscreen and should be skipped
             if config["skip_tallscreen_videos"] and is_tallscreen_video(yt_video_info):
-                logging.info(f"Skipping tallscreen video: '{mark['title']}' (height > width)")
+                if video_id not in tallscreen_cache:
+                    add_to_tallscreen_cache(download_location, video_id)
+                    tallscreen_cache.add(video_id)
+                logging.info(f"Skipping tallscreen video: '{mark['title']}' (height > width, added to cache)")
                 logging.info("---------------------------------")
                 continue
 
