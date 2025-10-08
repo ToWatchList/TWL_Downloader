@@ -99,7 +99,9 @@ def test_create_nfo_file(mock_find_video, mocker):
     )
     handle = mock_open_file()
     written_content = "".join(call.args[0] for call in handle.write.call_args_list)
-    assert '<?xml version="1.0" encoding="utf-8"?>' in written_content
+    # Accept both single and double quotes in XML declaration (both are valid)
+    assert ('<?xml version="1.0" encoding="utf-8"?>' in written_content or 
+            "<?xml version='1.0' encoding='utf-8'?>" in written_content)
     assert "<title>NFO Test</title>" in written_content
     assert '<id>test_id_123</id>' in written_content
     assert "<releasedate>2023-01-15</releasedate>" in written_content

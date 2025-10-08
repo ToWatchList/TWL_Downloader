@@ -5,6 +5,7 @@ import sys
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from zoneinfo import ZoneInfo
+import xml.etree.ElementTree as ET
 
 import requests
 import yt_dlp
@@ -381,42 +382,59 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
     twl_comment = strip_tags(twl_video_info['Mark'].get('comment', ''))
     plot = f"{twl_comment}\n\nDownloaded on: {downloaded_date}"
 
-    # --- Build the NFO XML structure ---
-    tags_xml = "".join([f"<tag>{tag}</tag>" for tag in yt_video_info.get("tags", [])])
-    nfo_content = f"""<?xml version="1.0" encoding="utf-8"?>
-<movie>
-  <title>{yt_video_info.get("title")}</title>
-  <originaltitle>{yt_video_info.get("title")}</originaltitle>
-  <sorttitle>{yt_video_info.get("title")}</sorttitle>
-  <year>{year_str}</year>
-  <premiered>{release_date_str}T00:00:00</premiered>
-  <filename>{os.path.basename(video_file_path)}</filename>
-  <path>{video_file_path}</path>
-  <plot>{plot}</plot>
-  <rating>{twl_video_info.get("Mark", {}).get("rating", "0")}</rating>
-  <votes>{twl_video_info.get("Mark", {}).get("votes", "0")}</votes>
-  <mpaa>NR</mpaa>
-  <studio>{yt_video_info.get("uploader")}</studio>
-  <director>{yt_video_info.get("uploader")}</director>
-  <writer>{yt_video_info.get("uploader")}</writer>
-  <actor>
-    <name>{yt_video_info.get("uploader")}</name>
-  </actor>
-  {tags_xml}
-  <country>US</country>
-  <language>English</language>
-  <script>UTF-8</script>
-  <releasedate>{release_date_str}</releasedate>
-  <added>{downloaded_date}</added>
-  <lastmodified>{downloaded_date}</lastmodified>
-  <playcount>0</playcount>
-  <id>{video_id}</id>
-</movie>"""
+    # --- Build the NFO XML structure using ElementTree for proper escaping ---
+    movie = ET.Element("movie")
+    
+    # Helper function to add text elements safely
+    def add_element(parent, tag, text):
+        if text is not None:
+            elem = ET.SubElement(parent, tag)
+            elem.text = str(text)
+            return elem
+        return None
+    
+    add_element(movie, "title", yt_video_info.get("title", ""))
+    add_element(movie, "originaltitle", yt_video_info.get("title", ""))
+    add_element(movie, "sorttitle", yt_video_info.get("title", ""))
+    add_element(movie, "year", year_str)
+    if release_date_str:
+        add_element(movie, "premiered", f"{release_date_str}T00:00:00")
+    add_element(movie, "filename", os.path.basename(video_file_path))
+    add_element(movie, "path", video_file_path)
+    add_element(movie, "plot", plot)
+    add_element(movie, "rating", twl_video_info.get("Mark", {}).get("rating", "0"))
+    add_element(movie, "votes", twl_video_info.get("Mark", {}).get("votes", "0"))
+    add_element(movie, "mpaa", "NR")
+    add_element(movie, "studio", yt_video_info.get("uploader", ""))
+    add_element(movie, "director", yt_video_info.get("uploader", ""))
+    add_element(movie, "writer", yt_video_info.get("uploader", ""))
+    
+    # Add actor
+    if yt_video_info.get("uploader"):
+        actor = ET.SubElement(movie, "actor")
+        add_element(actor, "name", yt_video_info.get("uploader"))
+    
+    # Add tags
+    for tag in yt_video_info.get("tags", []):
+        if tag:  # Only add non-empty tags
+            add_element(movie, "tag", tag)
+    
+    add_element(movie, "country", "US")
+    add_element(movie, "language", "English")
+    add_element(movie, "script", "UTF-8")
+    if release_date_str:
+        add_element(movie, "releasedate", release_date_str)
+    add_element(movie, "added", downloaded_date)
+    add_element(movie, "lastmodified", downloaded_date)
+    add_element(movie, "playcount", "0")
+    add_element(movie, "id", video_id)
 
     # --- Write the NFO file ---
     try:
-        with open(nfo_file_path, "w", encoding="utf-8") as nfo_file:
-            nfo_file.write(nfo_content)
+        # Create XML tree and write with proper formatting
+        tree = ET.ElementTree(movie)
+        ET.indent(tree, space="  ")  # Pretty print with 2-space indentation
+        tree.write(nfo_file_path, encoding="utf-8", xml_declaration=True)
         logging.info(f"NFO file created: {nfo_file_path}")
     except Exception as e:
         logging.error(f"Failed to create NFO file. Reason: {e}")
