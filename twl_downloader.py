@@ -384,7 +384,7 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
 
     # --- Build the NFO XML structure using ElementTree for proper escaping ---
     movie = ET.Element("movie")
-    
+
     # Helper function to add text elements safely
     def add_element(parent, tag, text):
         if text is not None:
@@ -392,7 +392,7 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
             elem.text = str(text)
             return elem
         return None
-    
+
     add_element(movie, "title", yt_video_info.get("title", ""))
     add_element(movie, "originaltitle", yt_video_info.get("title", ""))
     add_element(movie, "sorttitle", yt_video_info.get("title", ""))
@@ -408,17 +408,17 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
     add_element(movie, "studio", yt_video_info.get("uploader", ""))
     add_element(movie, "director", yt_video_info.get("uploader", ""))
     add_element(movie, "writer", yt_video_info.get("uploader", ""))
-    
+
     # Add actor
     if yt_video_info.get("uploader"):
         actor = ET.SubElement(movie, "actor")
         add_element(actor, "name", yt_video_info.get("uploader"))
-    
+
     # Add tags
     for tag in yt_video_info.get("tags", []):
         if tag:  # Only add non-empty tags
             add_element(movie, "tag", tag)
-    
+
     add_element(movie, "country", "US")
     add_element(movie, "language", "English")
     add_element(movie, "script", "UTF-8")
