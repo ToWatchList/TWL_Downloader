@@ -113,6 +113,8 @@ def get_config():
         "reprocess_existing": os.getenv("REPROCESS_EXISTING", "false").lower() in ("true", "1", "t"),
         # New: whether to skip tallscreen videos (height > width)
         "skip_tallscreen_videos": os.getenv("SKIP_TALLSCREEN_VIDEOS", "false").lower() in ("true", "1", "t"),
+        # New: whether to overwrite existing NFO files (useful for fixing malformed NFO files)
+        "overwrite_nfo_files": os.getenv("OVERWRITE_NFO_FILES", "false").lower() in ("true", "1", "t"),
     }
     if not config["api_key"]:
         logging.error("TWL_API_KEY environment variable not set.")
@@ -348,16 +350,21 @@ def set_file_modification_time(video_path, info_dict):
             logging.warning(f"Could not parse upload date '{upload_date_str}'")
 
 
-def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
+def create_nfo_file(video_file_path, twl_video_info, yt_video_info, config=None):
     """Creates a Jellyfin-compliant NFO file with rich metadata."""
     if not yt_video_info or not os.path.exists(video_file_path):
         return
 
     nfo_file_path = os.path.splitext(video_file_path)[0] + ".nfo"
-    if os.path.exists(nfo_file_path):
+    overwrite = config.get("overwrite_nfo_files", False) if config else False
+
+    if os.path.exists(nfo_file_path) and not overwrite:
         return
 
-    logging.debug(f"Creating NFO file for: {yt_video_info.get('title')}")
+    if os.path.exists(nfo_file_path) and overwrite:
+        logging.info(f"Overwriting existing NFO file for: {yt_video_info.get('title')}")
+    else:
+        logging.debug(f"Creating NFO file for: {yt_video_info.get('title')}")
 
     # --- Prepare metadata fields ---
     video_id = yt_video_info.get('id', '')
@@ -435,6 +442,13 @@ def create_nfo_file(video_file_path, twl_video_info, yt_video_info):
         tree = ET.ElementTree(movie)
         ET.indent(tree, space="  ")  # Pretty print with 2-space indentation
         tree.write(nfo_file_path, encoding="utf-8", xml_declaration=True)
+
+        # Set permissions to 664 (rw-rw-r--) so Jellyfin can write to it
+        try:
+            os.chmod(nfo_file_path, 0o664)
+        except Exception as perm_error:
+            logging.warning(f"Could not set permissions on NFO file: {perm_error}")
+
         logging.info(f"NFO file created: {nfo_file_path}")
     except Exception as e:
         logging.error(f"Failed to create NFO file. Reason: {e}")
@@ -525,7 +539,7 @@ def process_video(url, config):
     if video_file and video_info:
         set_file_modification_time(video_file, video_info)
         if config["write_nfo_files"]:
-            create_nfo_file(video_file, twl_video_info, video_info)
+            create_nfo_file(video_file, twl_video_info, video_info, config)
 
 
 def main():
@@ -599,7 +613,7 @@ def main():
                         # Only treat likely video files for NFO creation
                         if ext in video_exts:
                             if config["write_nfo_files"]:
-                                create_nfo_file(f, twl_video_info, yt_video_info)
+                                create_nfo_file(f, twl_video_info, yt_video_info, config)
                                 nfo_updated = True
                     if nfo_updated:
                         should_scan_kodi = True
@@ -622,7 +636,7 @@ def main():
             # Check if NFO file exists, create it if missing
             if config["write_nfo_files"]:
                 nfo_file_path = os.path.splitext(video_file)[0] + ".nfo"
-                if not os.path.exists(nfo_file_path):
+                if not os.path.exists(nfo_file_path) or config.get("overwrite_nfo_files", False):
                     logging.debug(f"NFO file missing for {video_id}, creating it now")
                     try:
                         yt_video_info = get_video_metadata(video_url, config)
@@ -631,7 +645,7 @@ def main():
                         yt_video_info = None
 
                     if yt_video_info:
-                        create_nfo_file(video_file, twl_video_info, yt_video_info)
+                        create_nfo_file(video_file, twl_video_info, yt_video_info, config)
         else:
             logging.debug(f"Video {video_id} needs to be downloaded")
             try:
@@ -677,7 +691,7 @@ def main():
             set_file_modification_time(final_video_path, yt_video_info)
 
             if config["write_nfo_files"]:
-                create_nfo_file(final_video_path, twl_video_info, yt_video_info)
+                create_nfo_file(final_video_path, twl_video_info, yt_video_info, config)
 
             should_scan_kodi = True
 

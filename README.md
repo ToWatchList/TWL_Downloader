@@ -95,6 +95,24 @@ When enabled, the downloader will:
 
 This is useful if you primarily watch videos on landscape displays and want to automatically filter out portrait-oriented content like TikTok videos, Instagram Reels, or YouTube Shorts that were filmed vertically.
 
+### Fixing Malformed NFO Files
+
+If you have existing NFO files that are malformed (causing XML parsing errors in Jellyfin, Kodi, or other media centers), you can regenerate them by setting:
+
+```bash
+OVERWRITE_NFO_FILES=true
+```
+
+When enabled:
+
+1.  **Overwrites Existing Files**: The downloader will regenerate `.nfo` files even if they already exist.
+2.  **Proper XML Escaping**: All special characters (`&`, `<`, `>`, `'`, `"`) will be properly escaped to ensure valid XML.
+3.  **Jellyfin-Compliant**: The new NFO files will be fully compliant with Jellyfin's NFO specification.
+
+This is particularly useful if you have older NFO files created before XML escaping was properly implemented. Simply run the downloader with this option enabled, and it will recreate all NFO files with proper formatting.
+
+**Tip**: You can combine this with `REPROCESS_EXISTING=true` to only update NFO files without re-downloading any videos.
+
 ### Path Management
 
 The application uses two important directories inside the container:
@@ -124,6 +142,7 @@ docker run --rm \
 | `TWL_LOOKBACK_DAYS`         | Number of days to look back for new videos.                                    | `28`                                                     |
 | `YOUTUBE_COOKIES_FILE`      | Optional. Path inside the container to a YouTube cookies file.                 | (none)                                                   |
 | `TWL_WRITE_NFO_FILES`       | Set to `true` to generate `.nfo` metadata files for Kodi.                      | `true`                                                   |
+| `OVERWRITE_NFO_FILES`       | Set to `true` to overwrite existing `.nfo` files (useful for fixing malformed files). | `false`                                            |
 | `SKIP_TALLSCREEN_VIDEOS`    | Set to `true` to skip downloading videos where height > width (portrait).      | `false`                                                  |
 | `SPONSORBLOCK_CATEGORIES`   | Comma-separated list of SponsorBlock categories to mark as chapters.           | `sponsor,intro,outro,selfpromo,preview,music_offtopic`   |
 | `TWL_KODI_HOSTNAME`         | The hostname or IP address of your Kodi instance.                              | (none)                                                   |
