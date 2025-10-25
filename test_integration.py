@@ -9,13 +9,13 @@ import twl_downloader
 
 
 @pytest.mark.slow
-def test_download_rick_astley(tmp_path):
+def test_download_4k60fps_video(tmp_path):
     """
-    Tests a real download of a known video to verify its properties.
+    Tests a real download of a known 4K60fps video to verify its properties.
     This test is slow and requires network access.
     """
-    video_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    video_id = "dQw4w9WgXcQ"
+    video_url = "https://www.youtube.com/watch?v=LXb3EKWsInQ"
+    video_id = "LXb3EKWsInQ"
     temp_dir = str(tmp_path)
 
     # Minimal config for the download function
@@ -24,6 +24,7 @@ def test_download_rick_astley(tmp_path):
         "download_location": temp_dir,
         "youtube_cookies_file": None,
         "sponsorblock_categories": [],
+        "skip_sabr_drm_downloads": False,  # Allow SABR/DRM downloads for testing
     }
 
     # First, get the metadata, as the main script does
@@ -58,10 +59,22 @@ def test_download_rick_astley(tmp_path):
 
     # Check for the exact duration from the format info
     duration = media_info["format"]["duration"]
-    assert duration == "213.068000", f"Expected duration to be '213.068000', but got {duration}"
+    assert duration == "313.808000", f"Expected duration to be '313.808000', but got {duration}"
 
-    # Check for the exact resolution from the stream info
+    # Check for the exact resolution from the stream info (4K)
     height = int(media_info["streams"][0]["height"])
+    width = int(media_info["streams"][0]["width"])
     assert height == 2160, f"Expected height to be 2160 (4K), but got {height}"
+    assert width == 3840, f"Expected width to be 3840 (4K), but got {width}"
 
-    print(f"Successfully verified '{video_path.name}' has duration {duration}s and height {height}p.")
+    # Check for 60fps (or 59.94fps which is commonly reported as 60fps)
+    fps = media_info["streams"][0].get("r_frame_rate", "").split("/")
+    if len(fps) == 2 and fps[1] != "0":
+        actual_fps = int(fps[0]) / int(fps[1])
+        assert 59.9 <= actual_fps <= 60.1, f"Expected ~60fps, but got {actual_fps}fps"
+
+    # Verify we got a high-quality format (HDR content should have high bitrate)
+    bitrate = int(media_info["format"].get("bit_rate", "0"))
+    assert bitrate > 10000000, f"Expected high bitrate (>10Mbps) for 4K60HDR, but got {bitrate}bps"
+
+    print(f"Successfully verified '{video_path.name}' has duration {duration}s, resolution {width}x{height}@{actual_fps}fps, and bitrate {bitrate}bps.")

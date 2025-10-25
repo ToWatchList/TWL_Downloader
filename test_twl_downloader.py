@@ -183,3 +183,40 @@ def test_drm_sabr_retry_without_cookies(mock_isfile, mock_yt_dlp):
     # Result should indicate no cookies were used
     assert result is not None
     assert result.get('_no_cookies') == True
+
+
+@patch("twl_downloader.yt_dlp.YoutubeDL")
+def test_skip_sabr_drm_downloads_flag(mock_yt_dlp):
+    """Test that skip_sabr_drm_downloads flag controls whether downloads proceed when DRM is detected."""
+    config_skip_drm = {
+        "youtube_cookies_file": None,
+        "sponsorblock_categories": [],
+        "skip_sabr_drm_downloads": True,
+    }
+
+    config_allow_drm = {
+        "youtube_cookies_file": None,
+        "sponsorblock_categories": [],
+        "skip_sabr_drm_downloads": False,
+    }
+
+    info_dict_with_drm = {
+        "title": "Test Video",
+        "id": "test_id",
+        "upload_date": "20230115",
+        "_drm_sabr_detected": True,
+    }
+
+    # Test that downloads are skipped when flag is True
+    with pytest.raises(twl_downloader.DRMProtectionError):
+        twl_downloader.download_video("http://example.com/video", info_dict_with_drm, config_skip_drm)
+
+    # Test that download proceeds when flag is False
+    mock_ydl_instance = MagicMock()
+    mock_yt_dlp.return_value.__enter__.return_value = mock_ydl_instance
+
+    # This should not raise an exception
+    twl_downloader.download_video("http://example.com/video", info_dict_with_drm, config_allow_drm)
+
+    # Verify that yt-dlp was actually called (download proceeded)
+    mock_yt_dlp.assert_called()

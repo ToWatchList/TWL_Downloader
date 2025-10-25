@@ -79,6 +79,16 @@ ERROR: Skipping video due to DRM/SABR protection: Cannot guarantee best quality 
 
 This feature ensures you never unknowingly download a low-quality version when a high-quality version should be available.
 
+#### Disabling DRM Protection (Advanced)
+
+In some cases, you may want to bypass the DRM protection checks and attempt to download videos even when protection is detected. This can be useful for testing or when you're willing to accept potentially lower quality downloads. To allow SABR/DRM downloads:
+
+```bash
+SKIP_SABR_DRM_DOWNLOADS=false
+```
+
+**Note**: The Docker image allows SABR/DRM downloads by default (`SKIP_SABR_DRM_DOWNLOADS=false`) to allow downloads to proceed. You can re-enable protection by setting `SKIP_SABR_DRM_DOWNLOADS=true` in your environment or rebuilding the image with the default changed.
+
 ### Filtering Tallscreen Videos
 
 By default, the downloader will process all videos regardless of their aspect ratio. However, if you want to skip portrait/vertical videos (where the height is greater than the width), you can enable the tallscreen filter:
@@ -145,6 +155,7 @@ docker run --rm \
 | `OVERWRITE_NFO_FILES`       | Set to `true` to overwrite existing `.nfo` files (useful for fixing malformed files). | `false`                                            |
 | `SKIP_TALLSCREEN_VIDEOS`    | Set to `true` to skip downloading videos where height > width (portrait).      | `false`                                                  |
 | `SPONSORBLOCK_CATEGORIES`   | Comma-separated list of SponsorBlock categories to mark as chapters.           | `sponsor,intro,outro,selfpromo,preview,music_offtopic`   |
+| `SKIP_SABR_DRM_DOWNLOADS`   | Set to `false` to bypass DRM/SABR protection and attempt downloads anyway.     | `false` (Docker), `true` (local)                        |
 | `TWL_KODI_HOSTNAME`         | The hostname or IP address of your Kodi instance.                              | (none)                                                   |
 | `TWL_KODI_PORT`             | The port for Kodi's web interface.                                             | `8080`                                                   |
 | `TWL_KODI_USER`             | The username for Kodi's web interface.                                         | (none)                                                   |

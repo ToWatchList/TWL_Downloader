@@ -115,6 +115,8 @@ def get_config():
         "skip_tallscreen_videos": os.getenv("SKIP_TALLSCREEN_VIDEOS", "false").lower() in ("true", "1", "t"),
         # New: whether to overwrite existing NFO files (useful for fixing malformed NFO files)
         "overwrite_nfo_files": os.getenv("OVERWRITE_NFO_FILES", "false").lower() in ("true", "1", "t"),
+        # New: whether to skip downloads when SABR/DRM protection is detected
+        "skip_sabr_drm_downloads": os.getenv("SKIP_SABR_DRM_DOWNLOADS", "true").lower() in ("true", "1", "t"),
     }
     if not config["api_key"]:
         logging.error("TWL_API_KEY environment variable not set.")
@@ -269,10 +271,12 @@ def download_video(url, info_dict, config):
     title = info_dict.get("title", "Unknown Title")
     video_id = info_dict.get("id", "UnknownID")
 
-    # Check if DRM/SABR was detected during metadata fetch
-    if info_dict.get('_drm_sabr_detected'):
+    # Check if DRM/SABR was detected during metadata fetch and if we should skip such downloads
+    if info_dict.get('_drm_sabr_detected') and config.get("skip_sabr_drm_downloads", True):
         logging.error(f"Skipping download of '{title}' due to DRM/SABR protection. Metadata was captured but download cannot proceed.")
         raise DRMProtectionError(f"DRM/SABR protection prevents downloading: {title}")
+    elif info_dict.get('_drm_sabr_detected'):
+        logging.warning(f"DRM/SABR protection detected for '{title}' but skipping is disabled. Attempting download anyway.")
 
     logging.info(f"Downloading: '{title}' ({url})")
 
