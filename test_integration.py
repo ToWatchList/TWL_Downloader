@@ -80,7 +80,7 @@ def test_download_4k60fps_video(tmp_path):
     print(f"Successfully verified '{video_path.name}' has duration {duration}s, resolution {width}x{height}@{actual_fps}fps, and bitrate {bitrate}bps.")
 
 
-@pytest.mark.slow 
+@pytest.mark.slow
 def test_youtube_description_chapters(tmp_path):
     """
     Tests YouTube description chapter embedding.
@@ -103,50 +103,50 @@ def test_youtube_description_chapters(tmp_path):
     info_dict = twl_downloader.get_video_metadata(video_url, config)
     assert info_dict is not None
     assert info_dict["id"] == video_id
-    
+
     twl_downloader.download_video(video_url, info_dict, config)
-    
+
     # Find the downloaded video
     video_files = list(Path(temp_dir).glob(f"*-{video_id}.mp4"))
     assert len(video_files) == 1, f"Expected 1 MP4 file, but found {len(video_files)}"
     video_path = video_files[0]
-    
+
     # Check for embedded chapters
     ffprobe_chapters_cmd = [
-        "ffprobe", "-v", "quiet", "-print_format", "json", 
+        "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_chapters", str(video_path)
     ]
-    
+
     result = subprocess.run(ffprobe_chapters_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe chapters failed: {result.stderr}"
-    
+
     chapters_info = json.loads(result.stdout)
     chapters = chapters_info.get("chapters", [])
-    
+
     print(f"Found {len(chapters)} YouTube description chapters:")
     for i, chapter in enumerate(chapters):
         start_time = float(chapter.get("start_time", 0))
         end_time = float(chapter.get("end_time", 0))
         title = chapter.get("tags", {}).get("title", f"Chapter {i+1}")
         print(f"  Chapter {i+1}: {start_time:.1f}s to {end_time:.1f}s - '{title}'")
-    
+
     # This video should have 6 chapters from its description
     assert len(chapters) >= 5, f"Expected at least 5 YouTube description chapters, found {len(chapters)}"
-    
+
     # Verify chapter titles contain expected content
     chapter_titles = [chapter.get("tags", {}).get("title", "") for chapter in chapters]
     expected_keywords = ["format", "trick-taking", "Bottle", "Bean", "Naishi", "Iliad"]
-    
+
     found_keywords = 0
     for keyword in expected_keywords:
         if any(keyword in title for title in chapter_titles):
             found_keywords += 1
-    
+
     assert found_keywords >= 3, f"Expected to find at least 3 keywords in chapter titles, found {found_keywords}"
     print(f"Successfully verified YouTube description chapters with {found_keywords}/{len(expected_keywords)} expected keywords")
 
 
-@pytest.mark.slow 
+@pytest.mark.slow
 def test_sponsorblock_chapter_marking(tmp_path):
     """
     Tests SponsorBlock chapter marking (default behavior).
@@ -169,47 +169,47 @@ def test_sponsorblock_chapter_marking(tmp_path):
     info_dict = twl_downloader.get_video_metadata(video_url, config)
     assert info_dict is not None
     assert info_dict["id"] == video_id
-    
+
     twl_downloader.download_video(video_url, info_dict, config)
-    
+
     # Find the downloaded video with chapters
     video_files = list(Path(temp_dir).glob(f"*-{video_id}.mp4"))
     assert len(video_files) == 1, f"Expected 1 MP4 file, but found {len(video_files)}"
     video_path = video_files[0]
-    
+
     # Check for embedded chapters
     ffprobe_chapters_cmd = [
-        "ffprobe", "-v", "quiet", "-print_format", "json", 
+        "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_chapters", str(video_path)
     ]
-    
+
     result = subprocess.run(ffprobe_chapters_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe chapters failed: {result.stderr}"
-    
+
     chapters_info = json.loads(result.stdout)
     chapters = chapters_info.get("chapters", [])
-    
+
     print(f"Found {len(chapters)} chapters with SponsorBlock marking:")
     for i, chapter in enumerate(chapters):
         start_time = float(chapter.get("start_time", 0))
         end_time = float(chapter.get("end_time", 0))
         title = chapter.get("tags", {}).get("title", f"Chapter {i+1}")
         print(f"  Chapter {i+1}: {start_time:.3f}s to {end_time:.3f}s - '{title}'")
-    
+
     # Get original duration for comparison
     ffprobe_format_cmd = [
         "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_format", str(video_path)
     ]
-    
+
     result = subprocess.run(ffprobe_format_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe format failed: {result.stderr}"
-    
+
     format_info = json.loads(result.stdout)
     original_duration = float(format_info["format"]["duration"])
-    
+
     print(f"Chapter-marked video duration: {original_duration}s (segments preserved)")
-    
+
     # The video may or may not have chapters depending on SponsorBlock data availability
     # The main test is that the download succeeded and we can check for chapters
     print(f"Note: This video has {len(chapters)} chapters (may be 0 if no SponsorBlock data or description chapters)")
@@ -239,56 +239,56 @@ def test_combined_youtube_and_sponsorblock_chapters(tmp_path):
     info_dict = twl_downloader.get_video_metadata(video_url, config)
     assert info_dict is not None
     assert info_dict["id"] == video_id
-    
+
     twl_downloader.download_video(video_url, info_dict, config)
-    
+
     # Find the downloaded video
     video_files = list(Path(temp_dir).glob(f"*-{video_id}.mp4"))
     assert len(video_files) == 1, f"Expected 1 MP4 file, but found {len(video_files)}"
     video_path = video_files[0]
-    
+
     # Check for embedded chapters
     ffprobe_chapters_cmd = [
-        "ffprobe", "-v", "quiet", "-print_format", "json", 
+        "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_chapters", str(video_path)
     ]
-    
+
     result = subprocess.run(ffprobe_chapters_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe chapters failed: {result.stderr}"
-    
+
     chapters_info = json.loads(result.stdout)
     chapters = chapters_info.get("chapters", [])
-    
+
     print(f"Found {len(chapters)} total chapters (YouTube + SponsorBlock):")
-    
+
     youtube_chapters = 0
     sponsorblock_chapters = 0
-    
+
     for i, chapter in enumerate(chapters):
         start_time = float(chapter.get("start_time", 0))
         end_time = float(chapter.get("end_time", 0))
         title = chapter.get("tags", {}).get("title", f"Chapter {i+1}")
         print(f"  Chapter {i+1}: {start_time:.1f}s to {end_time:.1f}s - '{title}'")
-        
+
         # Classify chapter type based on title
         if any(keyword in title.lower() for keyword in ["sponsor", "intro", "outro", "promo"]):
             sponsorblock_chapters += 1
         else:
             youtube_chapters += 1
-    
+
     print(f"Breakdown: {youtube_chapters} YouTube description chapters, {sponsorblock_chapters} SponsorBlock chapters")
-    
+
     # Should have YouTube description chapters (at least 5)
     assert len(chapters) >= 5, f"Expected at least 5 total chapters, found {len(chapters)}"
-    
+
     # Verify we got the expected YouTube chapters
     expected_keywords = ["format", "trick-taking", "Bottle", "Bean"]
     chapter_titles = [chapter.get("tags", {}).get("title", "") for chapter in chapters]
     found_keywords = sum(1 for keyword in expected_keywords if any(keyword in title for title in chapter_titles))
-    
+
     assert found_keywords >= 2, f"Expected YouTube chapter keywords, found {found_keywords}/{len(expected_keywords)}"
     print(f"Successfully verified combined chapter embedding with {found_keywords} YouTube keywords")
-    
+
 
 @pytest.mark.slow
 def test_sponsorblock_segment_removal(tmp_path):
@@ -313,39 +313,39 @@ def test_sponsorblock_segment_removal(tmp_path):
     info_dict = twl_downloader.get_video_metadata(video_url, config)
     assert info_dict is not None
     assert info_dict["id"] == video_id
-    
+
     twl_downloader.download_video(video_url, info_dict, config)
-    
+
     # Find the downloaded video with removed segments
     video_files = list(Path(temp_dir).glob(f"*-{video_id}.mp4"))
     assert len(video_files) == 1, f"Expected 1 MP4 file, but found {len(video_files)}"
     video_path = video_files[0]
-    
+
     # Get duration and chapters after segment removal
     ffprobe_format_cmd = [
         "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_format", "-show_chapters", str(video_path)
     ]
-    
+
     result = subprocess.run(ffprobe_format_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe failed: {result.stderr}"
-    
+
     media_info = json.loads(result.stdout)
     removed_duration = float(media_info["format"]["duration"])
     chapters = media_info.get("chapters", [])
-    
+
     print(f"Segment-removed video duration: {removed_duration}s")
     print(f"Chapters after removal: {len(chapters)}")
-    
+
     for i, chapter in enumerate(chapters):
         start_time = float(chapter.get("start_time", 0))
         end_time = float(chapter.get("end_time", 0))
         title = chapter.get("tags", {}).get("title", f"Chapter {i+1}")
         print(f"  Chapter {i+1}: {start_time:.3f}s to {end_time:.3f}s - '{title}'")
-    
+
     # Video should be reasonable length (not too short or long)
     assert 60 < removed_duration < 3600, f"Video duration {removed_duration}s seems unreasonable"
-    
+
     # May have chapters from the removal process
     print(f"Successfully tested segment removal - final duration: {removed_duration}s with {len(chapters)} chapters")
 
@@ -373,41 +373,41 @@ def test_no_sponsorblock_categories(tmp_path):
     info_dict = twl_downloader.get_video_metadata(video_url, config)
     assert info_dict is not None
     assert info_dict["id"] == video_id
-    
+
     twl_downloader.download_video(video_url, info_dict, config)
-    
+
     # Find the downloaded video
     video_files = list(Path(temp_dir).glob(f"*-{video_id}.mp4"))
     assert len(video_files) == 1, f"Expected 1 MP4 file, but found {len(video_files)}"
     video_path = video_files[0]
-    
+
     # Check for embedded chapters
     ffprobe_chapters_cmd = [
-        "ffprobe", "-v", "quiet", "-print_format", "json", 
+        "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_chapters", str(video_path)
     ]
-    
+
     result = subprocess.run(ffprobe_chapters_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe chapters failed: {result.stderr}"
-    
+
     chapters_info = json.loads(result.stdout)
     chapters = chapters_info.get("chapters", [])
-    
+
     print(f"Found {len(chapters)} chapters with SponsorBlock disabled:")
     for i, chapter in enumerate(chapters):
         start_time = float(chapter.get("start_time", 0))
         end_time = float(chapter.get("end_time", 0))
         title = chapter.get("tags", {}).get("title", f"Chapter {i+1}")
         print(f"  Chapter {i+1}: {start_time:.1f}s to {end_time:.1f}s - '{title}'")
-    
+
     # Should still get YouTube description chapters
     assert len(chapters) >= 5, f"Expected YouTube description chapters even without SponsorBlock, found {len(chapters)}"
-    
+
     # Verify these are YouTube chapters (not SponsorBlock)
     chapter_titles = [chapter.get("tags", {}).get("title", "") for chapter in chapters]
     youtube_indicators = ["format", "trick-taking", "Bottle", "Bean", "Naishi"]
     found_youtube = sum(1 for indicator in youtube_indicators if any(indicator in title for title in chapter_titles))
-    
+
     assert found_youtube >= 2, f"Expected YouTube chapter indicators, found {found_youtube}"
     print(f"Successfully verified YouTube-only chapters: {found_youtube} indicators found")
 
@@ -437,48 +437,48 @@ def test_chapter_edge_cases(tmp_path):
     info_dict = twl_downloader.get_video_metadata(video_url, config)
     assert info_dict is not None
     assert info_dict["id"] == video_id
-    
+
     twl_downloader.download_video(video_url, info_dict, config)
-    
+
     # Find the downloaded video
     video_files = list(Path(temp_dir).glob(f"*-{video_id}.mp4"))
     assert len(video_files) == 1, f"Expected 1 MP4 file, but found {len(video_files)}"
     video_path = video_files[0]
-    
+
     # Check for embedded chapters
     ffprobe_chapters_cmd = [
-        "ffprobe", "-v", "quiet", "-print_format", "json", 
+        "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_chapters", str(video_path)
     ]
-    
+
     result = subprocess.run(ffprobe_chapters_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe chapters failed: {result.stderr}"
-    
+
     chapters_info = json.loads(result.stdout)
     chapters = chapters_info.get("chapters", [])
-    
+
     print(f"Found {len(chapters)} chapters in video with full SponsorBlock categories:")
     for i, chapter in enumerate(chapters):
         start_time = float(chapter.get("start_time", 0))
         end_time = float(chapter.get("end_time", 0))
         title = chapter.get("tags", {}).get("title", f"Chapter {i+1}")
         print(f"  Chapter {i+1}: {start_time:.1f}s to {end_time:.1f}s - '{title}'")
-    
+
     # Video should download successfully regardless of chapter count
     # (May be 0 chapters if no description chapters and no SponsorBlock segments)
     assert len(chapters) >= 0, "Chapter count should be non-negative"
-    
+
     # Verify the video file is valid
     ffprobe_format_cmd = [
         "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_format", str(video_path)
     ]
-    
+
     result = subprocess.run(ffprobe_format_cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"ffprobe format failed: {result.stderr}"
-    
+
     format_info = json.loads(result.stdout)
     duration = float(format_info["format"]["duration"])
-    
+
     assert duration > 60, f"Video seems too short: {duration}s"
     print(f"Successfully handled edge case video: {duration}s duration, {len(chapters)} chapters")

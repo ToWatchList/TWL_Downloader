@@ -14,10 +14,10 @@ import twl_downloader
 
 def test_chapter_configuration():
     """Test that our chapter configuration works correctly in various scenarios."""
-    
+
     print("Testing TWL Downloader Chapter Configuration")
     print("=" * 50)
-    
+
     test_cases = [
         {
             "name": "YouTube Description Chapters Only",
@@ -53,11 +53,11 @@ def test_chapter_configuration():
             "expected_keywords": []  # Titles may change after segment removal
         }
     ]
-    
+
     for i, test_case in enumerate(test_cases, 1):
         print(f"\nTest {i}: {test_case['name']}")
         print("-" * 40)
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             # Build complete config
             config = {
@@ -67,80 +67,80 @@ def test_chapter_configuration():
                 "skip_sabr_drm_downloads": False,
                 **test_case["config"]
             }
-            
+
             try:
                 # Get metadata first
                 info_dict = twl_downloader.get_video_metadata(test_case["url"], config)
                 if not info_dict:
                     print(f"  ❌ Failed to get metadata for {test_case['url']}")
                     continue
-                
+
                 print(f"  ✓ Got metadata for video: {info_dict.get('title', 'Unknown')}")
-                
+
                 # Download the video
                 twl_downloader.download_video(test_case["url"], info_dict, config)
-                
+
                 # Find the downloaded video
                 video_files = list(Path(temp_dir).glob(f"*-{test_case['video_id']}.mp4"))
                 if not video_files:
                     print(f"  ❌ No video file found after download")
                     continue
-                
+
                 video_path = video_files[0]
                 print(f"  ✓ Downloaded: {video_path.name}")
-                
+
                 # Check chapters using ffprobe
                 ffprobe_cmd = [
                     "ffprobe", "-v", "quiet", "-print_format", "json",
                     "-show_chapters", "-show_format", str(video_path)
                 ]
-                
+
                 result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
                 if result.returncode != 0:
                     print(f"  ❌ ffprobe failed: {result.stderr}")
                     continue
-                
+
                 media_info = json.loads(result.stdout)
                 chapters = media_info.get("chapters", [])
                 duration = float(media_info["format"]["duration"])
-                
+
                 print(f"  ✓ Video duration: {duration:.1f}s")
                 print(f"  ✓ Found {len(chapters)} chapters:")
-                
+
                 for j, chapter in enumerate(chapters[:10]):  # Show first 10 chapters
                     start_time = float(chapter.get("start_time", 0))
                     end_time = float(chapter.get("end_time", 0))
                     title = chapter.get("tags", {}).get("title", f"Chapter {j+1}")
                     print(f"    {j+1:2d}. {start_time:7.1f}s - {end_time:7.1f}s : {title}")
-                
+
                 if len(chapters) > 10:
                     print(f"    ... and {len(chapters) - 10} more chapters")
-                
+
                 # Verify chapter count
                 if len(chapters) >= test_case["expected_chapters"]:
                     print(f"  ✓ Chapter count: {len(chapters)} >= {test_case['expected_chapters']} (expected)")
                 else:
                     print(f"  ⚠ Chapter count: {len(chapters)} < {test_case['expected_chapters']} (expected)")
                     print(f"    Note: This may be normal if SponsorBlock data is unavailable")
-                
+
                 # Check for expected keywords
                 if test_case["expected_keywords"]:
                     chapter_titles = [chapter.get("tags", {}).get("title", "") for chapter in chapters]
-                    found_keywords = [kw for kw in test_case["expected_keywords"] 
+                    found_keywords = [kw for kw in test_case["expected_keywords"]
                                     if any(kw in title for title in chapter_titles)]
-                    
+
                     if found_keywords:
                         print(f"  ✓ Found expected keywords: {', '.join(found_keywords)}")
                     else:
                         print(f"  ⚠ No expected keywords found in chapter titles")
-                
+
                 print(f"  ✅ Test {i} completed successfully")
-                
+
             except Exception as e:
                 print(f"  ❌ Test {i} failed: {e}")
                 import traceback
                 traceback.print_exc()
-    
+
     print("\n" + "=" * 50)
     print("Chapter Configuration Test Complete")
     print("All configuration scenarios have been tested.")

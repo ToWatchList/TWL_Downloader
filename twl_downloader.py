@@ -300,16 +300,16 @@ def download_video(url, info_dict, config):
     postprocessors = [
         {
             "key": "SponsorBlock",
-            "when": "pre_process", 
+            "when": "pre_process",
             "categories": config["sponsorblock_categories"],
         },
         {
-            "key": "FFmpegMetadata", 
+            "key": "FFmpegMetadata",
             "add_metadata": True,
             "add_chapters": True,  # This is the key to embedding SponsorBlock data as chapters!
         },
     ]
-    
+
     # Log SponsorBlock configuration for debugging
     logging.debug(f"SponsorBlock categories: {config['sponsorblock_categories']}")
     logging.debug(f"Remove sponsor segments: {config.get('remove_sponsor_segments', False)}")
