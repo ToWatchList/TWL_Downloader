@@ -89,6 +89,26 @@ SKIP_SABR_DRM_DOWNLOADS=false
 
 **Note**: The Docker image allows SABR/DRM downloads by default (`SKIP_SABR_DRM_DOWNLOADS=false`) to allow downloads to proceed. You can re-enable protection by setting `SKIP_SABR_DRM_DOWNLOADS=true` in your environment or rebuilding the image with the default changed.
 
+### SponsorBlock Audio Sync Fix
+
+By default, the downloader preserves audio synchronization by marking sponsor segments as chapters instead of physically removing them. This prevents audio sync issues that can occur in media players like Kodi, especially when custom audio delays are configured.
+
+```bash
+REMOVE_SPONSOR_SEGMENTS=false  # Default: preserve audio sync
+```
+
+**Recommended (Default)**: Keep `REMOVE_SPONSOR_SEGMENTS=false`
+-   **Preserves Timeline**: The video timeline remains intact, preventing audio sync issues
+-   **Chapter Navigation**: Sponsor segments are marked as chapters for easy skipping
+-   **Kodi Compatible**: Works perfectly with Kodi's audio delay settings
+
+**Alternative**: Set `REMOVE_SPONSOR_SEGMENTS=true` for the old behavior
+-   **Physically Removes**: Sponsor segments are cut out of the video file
+-   **Smaller Files**: Results in slightly smaller file sizes
+-   **Sync Issues**: May cause audio desynchronization in some players, especially Kodi
+
+If you experience audio sync problems after sponsor segments in Kodi (where you need to stop and restart playback to fix sync), use the default setting (`false`) to resolve this issue.
+
 ### Filtering Tallscreen Videos
 
 By default, the downloader will process all videos regardless of their aspect ratio. However, if you want to skip portrait/vertical videos (where the height is greater than the width), you can enable the tallscreen filter:

@@ -117,6 +117,8 @@ def get_config():
         "overwrite_nfo_files": os.getenv("OVERWRITE_NFO_FILES", "false").lower() in ("true", "1", "t"),
         # New: whether to skip downloads when SABR/DRM protection is detected
         "skip_sabr_drm_downloads": os.getenv("SKIP_SABR_DRM_DOWNLOADS", "true").lower() in ("true", "1", "t"),
+        # New: whether to remove sponsor segments (true) or just mark as chapters (false, recommended for Kodi)
+        "remove_sponsor_segments": os.getenv("REMOVE_SPONSOR_SEGMENTS", "false").lower() in ("true", "1", "t"),
     }
     if not config["api_key"]:
         logging.error("TWL_API_KEY environment variable not set.")
@@ -132,7 +134,8 @@ def get_all_files_for_video_id(video_id, download_dir):
 
 def find_video_file_for_id(video_id, download_dir):
     """Finds the main video file for a given video_id."""
-    video_extensions = ["mkv", "mp4", "webm", "mov", "flv", "avi"]
+    # Prioritize mp4 since that's our default output format now
+    video_extensions = ["mp4", "mkv", "webm", "mov", "flv", "avi"]
     for ext in video_extensions:
         files = glob.glob(os.path.join(download_dir, f"*-{video_id}.{ext}"))
         if files:
@@ -295,32 +298,66 @@ def download_video(url, info_dict, config):
     output_template = os.path.join(output_path, f"{safe_title}-{video_id}.%(ext)s")
 
     postprocessors = [
-        {"key": "FFmpegMetadata", "add_metadata": True},
         {
             "key": "SponsorBlock",
-            "when": "pre_process",
+            "when": "pre_process", 
             "categories": config["sponsorblock_categories"],
         },
         {
-            "key": "ModifyChapters",
-            "remove_sponsor_segments": ["sponsor"],  # Only remove sponsor segments
+            "key": "FFmpegMetadata", 
+            "add_metadata": True,
+            "add_chapters": True,  # This is the key to embedding SponsorBlock data as chapters!
         },
     ]
+    
+    # Log SponsorBlock configuration for debugging
+    logging.debug(f"SponsorBlock categories: {config['sponsorblock_categories']}")
+    logging.debug(f"Remove sponsor segments: {config.get('remove_sponsor_segments', False)}")
+
+    # Add ModifyChapters processor based on configuration
+    if config.get("remove_sponsor_segments", False):
+        # Enhanced behavior: physically remove sponsor segments with timeline reconstruction
+        postprocessors.append({
+            "key": "ModifyChapters",
+            "remove_sponsor_segments": config["sponsorblock_categories"],
+            "force_keyframes": True,  # Ensure clean cuts at segment boundaries
+        })
+    else:
+        # Default behavior: keep segments but mark as chapters (preserves audio sync)
+        # ModifyChapters is REQUIRED to convert SponsorBlock data to chapters
+        postprocessors.append({
+            "key": "ModifyChapters",
+            # Don't remove segments, just create chapters from SponsorBlock data
+            "force_keyframes": True,
+        })
 
     # Accept webm format if needed to bypass DRM/SABR
     ydl_format = "bestvideo+bestaudio/best"
 
     ydl_opts = {
         "format": ydl_format,
-        "merge_output_format": "mkv",
+        "merge_output_format": "mp4",  # Changed from mkv to mp4 for better SponsorBlock chapter support
         "outtmpl": output_template,
         "writethumbnail": True,
         "writesubtitles": True,
+        "writeautomaticsub": True,
         "embedsubtitles": True,
         "addmetadata": True,
         "quiet": True,
         "postprocessors": postprocessors,
+        "embed_chapters": True,  # Ensure chapters are written to the file
     }
+
+    # Add FFmpeg arguments for timeline reconstruction when removing segments
+    if config.get("remove_sponsor_segments", False):
+        # These FFmpeg args help maintain proper A/V sync after segment removal
+        ydl_opts["postprocessor_args"] = {
+            "ffmpeg": [
+                "-avoid_negative_ts", "make_zero",  # Ensure timestamps start at 0
+                "-fflags", "+genpts",  # Generate presentation timestamps
+                "-async", "1",  # Audio sync correction
+            ]
+        }
 
     # Only use cookies if we didn't detect DRM/SABR issues
     if not skip_cookies and config["youtube_cookies_file"] and os.path.isfile(config["youtube_cookies_file"]):
@@ -610,7 +647,7 @@ def main():
                 matching_files = get_files_matching_video_id(video_id, download_location)
                 if matching_files:
                     logging.info(f"Found {len(matching_files)} existing file(s) for {video_id}; updating NFOs if needed.")
-                    video_exts = {"mkv", "mp4", "webm", "mov", "flv", "avi"}
+                    video_exts = {"mp4", "mkv", "webm", "mov", "flv", "avi"}
                     nfo_updated = False
                     for f in matching_files:
                         ext = os.path.splitext(f)[1].lstrip('.').lower()
