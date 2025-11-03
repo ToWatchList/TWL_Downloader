@@ -119,6 +119,12 @@ def get_config():
         "skip_sabr_drm_downloads": os.getenv("SKIP_SABR_DRM_DOWNLOADS", "true").lower() in ("true", "1", "t"),
         # New: whether to remove sponsor segments (true) or just mark as chapters (false, recommended for Kodi)
         "remove_sponsor_segments": os.getenv("REMOVE_SPONSOR_SEGMENTS", "false").lower() in ("true", "1", "t"),
+        # EJS (External JavaScript) configuration for solving YouTube challenges
+        "js_runtimes": os.getenv("JS_RUNTIMES", "deno").split(","),  # Supported: deno, bun, node, quickjs
+        "remote_components": os.getenv("REMOTE_COMPONENTS", "ejs:github"),  # Supported: ejs:npm, ejs:github
+        # PO Token configuration for bypassing YouTube GVS (Google Video Server) restrictions
+        "po_token": os.getenv("YOUTUBE_PO_TOKEN"),  # Pass PO token for mweb client (GVS requests)
+        "use_mweb_client": os.getenv("USE_MWEB_CLIENT", "false").lower() in ("true", "1", "t"),  # Force mweb client for PO token support
     }
     if not config["api_key"]:
         logging.error("TWL_API_KEY environment variable not set.")
@@ -170,7 +176,13 @@ def get_video_metadata(url, config):
             logging.debug(msg)
         def warning(self, msg):
             warning_messages.append(msg)
-            logging.warning(msg)
+            # Only show simplified warnings to user, full details go to DEBUG
+            if 'nsig extraction failed' in msg or 'Falling back to generic' in msg:
+                logging.debug(msg)  # Move verbose yt-dlp warnings to DEBUG
+            elif 'SABR streaming' in msg or 'missing a url' in msg:
+                logging.debug(msg)  # Move SABR details to DEBUG
+            else:
+                logging.warning(msg)
         def error(self, msg):
             warning_messages.append(msg)
             logging.error(msg)
@@ -181,6 +193,8 @@ def get_video_metadata(url, config):
         "quiet": False,
         "skip_download": True,
         "logger": WarningLogger(),
+        "js_runtimes": ",".join(config["js_runtimes"]),
+        "remote_components": config["remote_components"],
     }
 
     # Try with cookies first
@@ -192,6 +206,20 @@ def get_video_metadata(url, config):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
+        # Check for nsig extraction failures (n parameter decryption issues)
+        nsig_failed = any('nsig extraction failed' in msg for msg in warning_messages)
+        if nsig_failed and not config.get("_tried_tv_client"):
+            logging.info(f"Retrying with alternate client for {url}")
+            logging.debug(f"nsig extraction failed with default client, retrying with tv client")
+            warning_messages.clear()
+            ydl_opts_tv = ydl_opts.copy()
+            ydl_opts_tv["extractor_args"] = {"youtube": ["player_client=tv"]}
+            if use_cookies:
+                ydl_opts_tv["cookiefile"] = config["youtube_cookies_file"]
+            with yt_dlp.YoutubeDL(ydl_opts_tv) as ydl:
+                info = ydl.extract_info(url, download=False)
+            logging.info(f"Successfully fetched metadata using tv client for {url}")
+
         # Check for DRM/SABR warnings
         drm_sabr_detected = any(
             'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg
@@ -201,7 +229,8 @@ def get_video_metadata(url, config):
         if drm_sabr_detected:
             if use_cookies:
                 # Retry without cookies
-                logging.warning(f"DRM/SABR detected with cookies, retrying without cookies for {url}")
+                logging.info(f"Retrying without cookies for {url}")
+                logging.debug(f"DRM/SABR detected with cookies, attempting workaround")
                 warning_messages.clear()
                 ydl_opts_no_cookies = {
                     "quiet": False,
@@ -218,25 +247,47 @@ def get_video_metadata(url, config):
                 )
 
                 if drm_sabr_still_detected:
+                    # If we have a PO token and cookies, try mweb client with PO token for GVS support
+                    if config.get("po_token") and use_cookies:
+                        logging.warning(f"SABR/DRM still detected without cookies. Trying mweb client with PO token for {url}")
+                        warning_messages.clear()
+                        ydl_opts_mweb = {
+                            "quiet": False,
+                            "skip_download": True,
+                            "logger": WarningLogger(),
+                            "cookiefile": config["youtube_cookies_file"],
+                            "extractor_args": {"youtube": [f"player_client=mweb", f"po_token=mweb.gvs+{config['po_token']}"]},
+                        }
+                        try:
+                            with yt_dlp.YoutubeDL(ydl_opts_mweb) as ydl:
+                                info = ydl.extract_info(url, download=False)
+                            logging.info(f"Successfully fetched metadata using mweb client with PO token for {url}")
+                            return info
+                        except Exception as e:
+                            logging.warning(f"mweb client with PO token also failed: {e}")
+
                     # Instead of raising an exception, log warning and return metadata with flag
-                    logging.warning(f"DRM/SABR protection detected for {url} even without cookies. Cannot guarantee best quality download.")
+                    logging.warning(f"YouTube protection detected for {url}. Video may be lower quality than expected.")
+                    logging.debug(f"DRM/SABR protection details: {len([m for m in warning_messages if 'SABR' in m or 'DRM' in m])} warnings")
                     for msg in warning_messages:
                         if 'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg:
-                            logging.warning(f"  - {msg}")
+                            logging.debug(f"  - {msg}")
                     # Mark that DRM/SABR was detected but still return the metadata
                     info['_drm_sabr_detected'] = True
                     return info
                 else:
-                    logging.info(f"Successfully bypassed DRM/SABR by removing cookies for {url}")
+                    logging.info(f"Successfully retrieved metadata for {url}")
+                    logging.debug(f"Bypassed DRM/SABR by removing cookies")
                     # Mark that we should download without cookies
                     info['_no_cookies'] = True
                     return info
             else:
                 # Instead of raising an exception, log warning and return metadata with flag
-                logging.warning(f"DRM/SABR protection detected for {url}. Cannot guarantee best quality download.")
+                logging.warning(f"YouTube protection detected for {url}. Video may be lower quality than expected.")
+                logging.debug(f"DRM/SABR protection detected without cookies")
                 for msg in warning_messages:
                     if 'DRM protected' in msg or 'SABR streaming' in msg or 'missing a url' in msg:
-                        logging.warning(f"  - {msg}")
+                        logging.debug(f"  - {msg}")
                 # Mark that DRM/SABR was detected but still return the metadata
                 info['_drm_sabr_detected'] = True
                 return info
@@ -279,7 +330,8 @@ def download_video(url, info_dict, config):
         logging.error(f"Skipping download of '{title}' due to DRM/SABR protection. Metadata was captured but download cannot proceed.")
         raise DRMProtectionError(f"DRM/SABR protection prevents downloading: {title}")
     elif info_dict.get('_drm_sabr_detected'):
-        logging.warning(f"DRM/SABR protection detected for '{title}' but skipping is disabled. Attempting download anyway.")
+        logging.info(f"Protection detected for '{title}'. Attempting download with available formats.")
+        logging.debug(f"DRM/SABR protection detected but SKIP_SABR_DRM_DOWNLOADS=false")
 
     logging.info(f"Downloading: '{title}' ({url})")
 
@@ -344,8 +396,11 @@ def download_video(url, info_dict, config):
         "embedsubtitles": True,
         "addmetadata": True,
         "quiet": True,
+        "no_warnings": True,  # Suppress yt-dlp warnings during download (we already handled them in metadata phase)
         "postprocessors": postprocessors,
         "embed_chapters": True,  # Ensure chapters are written to the file
+        "js_runtimes": ",".join(config["js_runtimes"]),
+        "remote_components": config["remote_components"],
     }
 
     # Add FFmpeg arguments for timeline reconstruction when removing segments
@@ -359,10 +414,18 @@ def download_video(url, info_dict, config):
             ]
         }
 
-    # Only use cookies if we didn't detect DRM/SABR issues
-    if not skip_cookies and config["youtube_cookies_file"] and os.path.isfile(config["youtube_cookies_file"]):
+    # Configure PO token provider to use extract mode (direct generation from cookies)
+    use_cookies = not skip_cookies and config["youtube_cookies_file"] and os.path.isfile(config["youtube_cookies_file"])
+
+    if use_cookies:
         ydl_opts["cookiefile"] = config["youtube_cookies_file"]
-        logging.debug(f"Using cookies for download: {config['youtube_cookies_file']}")
+        # Enable automatic PO token generation with bgutil provider
+        ydl_opts["extractor_args"] = {
+            "youtube": {
+                "po_token_provider": ["pot:bgutil:extract"],
+            }
+        }
+        logging.debug(f"Using cookies with PO token provider for download: {config['youtube_cookies_file']}")
     elif skip_cookies:
         logging.info(f"Downloading without cookies to bypass DRM/SABR protection")
 
@@ -370,6 +433,39 @@ def download_video(url, info_dict, config):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except Exception as e:
+        error_str = str(e).lower()
+
+        # Retry with tv client if nsig extraction failed
+        if "nsig extraction failed" in error_str or "n function" in error_str:
+            logging.warning(f"Download failed with nsig error, retrying with tv client: {e}")
+            ydl_opts_tv = ydl_opts.copy()
+            ydl_opts_tv["extractor_args"] = {"youtube": ["player_client=tv"]}
+            if "cookiefile" in ydl_opts_tv:
+                del ydl_opts_tv["cookiefile"]  # Clear cookies for tv client
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts_tv) as ydl:
+                    ydl.download([url])
+                    logging.info(f"Successfully downloaded with tv client fallback")
+                    return
+            except Exception as e_tv:
+                logging.error(f"Download also failed with tv client fallback. Reason: {e_tv}")
+                raise DownloadError(f"Failed to download with both default and tv clients: {e_tv}")
+
+        # Retry with mweb client + PO token if SABR/DRM error occurs and we have both
+        elif ("sabr" in error_str or "drm" in error_str or "missing a url" in error_str) and config.get("po_token") and config["youtube_cookies_file"]:
+            logging.warning(f"Download failed with SABR/DRM, retrying with mweb client and PO token: {e}")
+            ydl_opts_mweb = ydl_opts.copy()
+            ydl_opts_mweb["extractor_args"] = {"youtube": [f"player_client=mweb", f"po_token=mweb.gvs+{config['po_token']}"]}
+            ydl_opts_mweb["cookiefile"] = config["youtube_cookies_file"]
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts_mweb) as ydl:
+                    ydl.download([url])
+                    logging.info(f"Successfully downloaded with mweb client and PO token")
+                    return
+            except Exception as e_mweb:
+                logging.error(f"Download also failed with mweb + PO token. Reason: {e_mweb}")
+                # Fall through to regular error handling
+
         logging.error(f"Failed to download '{title}'. Reason: {e}")
         raise DownloadError(f"Failed to download: {e}")
 

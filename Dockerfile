@@ -40,10 +40,14 @@ CMD ["/bin/sh", "-c", "PYTHONPATH=. pytest"]
 # This stage copies the pre-built venv, the uv binary, and the app code into a clean image.
 FROM base AS final
 
-# Install ffmpeg (required by yt-dlp and Bun installation).
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && \
+# Install ffmpeg and Deno for EJS (External JavaScript) support
+# ffmpeg is required by yt-dlp for video processing
+# Deno is a JavaScript runtime needed for yt-dlp's EJS challenge solver scripts
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg curl unzip && \
     rm -rf /var/lib/apt/lists/* && \
-    curl -fsSL https://bun.sh/install | bash
+    # Install Deno for EJS support
+    curl -fsSL https://deno.land/x/install/install.sh | sh
 
 # Copy the virtual environment from the builder stage.
 COPY --from=builder /opt/venv /opt/venv
@@ -54,13 +58,10 @@ COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 # Copy the application scripts.
 COPY twl_downloader.py entrypoint.sh ./
 
-# Add the virtual environment's bin directory to the PATH.
-# This ensures that the script uses the Python and packages from the venv.
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Allow SABR/DRM downloads by default for the production image
-# Can be overridden by setting SKIP_SABR_DRM_DOWNLOADS=true at runtime
-ENV SKIP_SABR_DRM_DOWNLOADS=false
+# Add the virtual environment's bin directory to the PATH, plus Deno.
+# This ensures that the script uses the Python and packages from the venv,
+# and that yt-dlp can access the JavaScript runtime for EJS.
+ENV PATH="/opt/venv/bin:/root/.deno/bin:$PATH"
 
 # Define volumes for persistent storage.
 VOLUME ["/downloads", "/config", "/tmp"]

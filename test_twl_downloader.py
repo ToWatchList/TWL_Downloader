@@ -42,6 +42,10 @@ def test_download_uses_hardcoded_tmp_path(mock_yt_dlp):
     config = {
         "youtube_cookies_file": None,
         "sponsorblock_categories": [],
+        "js_runtimes": ["deno"],
+        "remote_components": "ejs:github",
+        "po_token": None,
+        "use_mweb_client": False,
     }
     info_dict = {"title": "Test Video", "id": "test_id"}
     mock_ydl_instance = MagicMock()
@@ -127,6 +131,10 @@ def test_drm_sabr_retry_without_cookies(mock_isfile, mock_yt_dlp):
         "youtube_cookies_file": "/config/cookies.txt",
         "sponsorblock_categories": [],
         "tmp_download_location": "/tmp",
+        "js_runtimes": ["deno"],
+        "remote_components": "ejs:github",
+        "po_token": None,
+        "use_mweb_client": False,
     }
 
     drm_warning = "[youtube] test_id: Some tv client https formats have been skipped as they are DRM protected"
@@ -192,12 +200,20 @@ def test_skip_sabr_drm_downloads_flag(mock_yt_dlp):
         "youtube_cookies_file": None,
         "sponsorblock_categories": [],
         "skip_sabr_drm_downloads": True,
+        "js_runtimes": ["deno"],
+        "remote_components": "ejs:github",
+        "po_token": None,
+        "use_mweb_client": False,
     }
 
     config_allow_drm = {
         "youtube_cookies_file": None,
         "sponsorblock_categories": [],
         "skip_sabr_drm_downloads": False,
+        "js_runtimes": ["deno"],
+        "remote_components": "ejs:github",
+        "po_token": None,
+        "use_mweb_client": False,
     }
 
     info_dict_with_drm = {

@@ -6,7 +6,8 @@ This project is designed to be run as a Docker container. It syncs your local vi
 
 ## Key Features
 
--   **Best Quality Downloads**: Automatically downloads the best available video and audio streams and packages them in a high-quality MKV container.
+-   **Best Quality Downloads**: Automatically downloads the best available video and audio streams and packages them in a high-quality MP4 container.
+-   **EJS (External JavaScript) Support**: Uses yt-dlp's External JavaScript system with Deno to solve YouTube's JavaScript challenges, ensuring reliable access to video streams even when YouTube's protection mechanisms evolve.
 -   **DRM/SABR Protection Handling**: Automatically detects when YouTube applies DRM protection or SABR streaming restrictions (which can limit quality) and retries the download without cookies to obtain the best available quality. If the best quality still cannot be obtained, the download is skipped rather than downloading a degraded version.
 -   **Embedded Chapters**: Automatically embeds chapters into the video file from both YouTube's native chapters and from SponsorBlock data.
 -   **Rich Metadata**: Creates detailed, Jellyfin-compliant `.nfo` files for media centers like Kodi, including the video description, upload date, and your personal ToWatchList comments.
@@ -53,41 +54,66 @@ To download age-restricted or private videos that require a login, you can provi
 
 Now, when you run the application, it will automatically use these cookies for YouTube downloads.
 
-### Handling DRM and SABR Protection
+### External JavaScript (EJS) Support
 
-YouTube sometimes applies DRM (Digital Rights Management) protection or forces SABR (Streaming Audio/Video Bitrate Reduction) streaming on certain videos, especially when using cookies or certain client types. This can prevent access to the highest quality formats (like 4K).
+The downloader uses yt-dlp's **External JavaScript (EJS)** system to solve YouTube's JavaScript challenges. This ensures reliable video downloads even as YouTube's protection mechanisms evolve.
 
-The downloader automatically handles this situation:
+**What is EJS?**
 
-1.  **Detection**: When DRM/SABR warnings are detected during the initial metadata fetch, the script recognizes that the best quality may not be available.
-2.  **Automatic Retry**: The script automatically retries the download *without* cookies, which often bypasses these restrictions and allows access to higher quality formats.
-3.  **Quality Guarantee**: If the best quality still cannot be obtained after the retry, the download is **skipped entirely** rather than downloading a degraded version. This ensures your library only contains the highest quality videos available.
+EJS allows yt-dlp to run JavaScript challenge solver scripts using an external JavaScript runtime. The Docker image includes **Deno**, a secure JavaScript runtime that executes these scripts in a sandboxed environment.
 
-You'll see log messages like this when DRM/SABR protection is detected and handled:
+**Configuration:**
 
-```
-WARNING: [youtube] Some tv client https formats have been skipped as they are DRM protected
-INFO: Retrying download without cookies to bypass DRM/SABR restrictions...
-INFO: Successfully downloaded without cookies
+```bash
+JS_RUNTIMES=deno              # JavaScript runtime (default: Deno)
+REMOTE_COMPONENTS=ejs:github  # Where to download EJS scripts
 ```
 
-If the video cannot be downloaded in acceptable quality even without cookies, you'll see:
+See the environment variables table below for more details. For comprehensive EJS troubleshooting, visit the [yt-dlp EJS Wiki](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
+
+### Handling YouTube Protection Mechanisms
+
+YouTube frequently changes its protection mechanisms (DRM, SABR, nsig extraction), which can cause temporary download issues. The downloader implements multiple automatic strategies to handle these:
+
+**Automatic Handling:**
+
+1. **SABR/DRM Detection**: Automatically detects when YouTube forces SABR or DRM streaming
+2. **Retry Without Cookies**: Retries downloads without cookies, which often bypasses these restrictions
+3. **TV Client Fallback**: If n-parameter extraction fails, automatically retries with the `tv` client
+4. **Quality Guarantee**: If best quality can't be obtained, the download is skipped (not degraded)
+
+**Typical Recovery Messages:**
 
 ```
-ERROR: Skipping video due to DRM/SABR protection: Cannot guarantee best quality download
+WARNING: DRM/SABR detected with cookies, retrying without cookies...
+INFO: Successfully bypassed DRM/SABR by removing cookies
 ```
 
-This feature ensures you never unknowingly download a low-quality version when a high-quality version should be available.
+**If Issues Persist:**
 
-#### Disabling DRM Protection (Advanced)
+- **Update yt-dlp**: The most important step - YouTube protection changes are fixed in new yt-dlp releases
+- **Use PO Tokens** (advanced): When SABR blocks all clients, a PO Token can unlock the `mweb` client
 
-In some cases, you may want to bypass the DRM protection checks and attempt to download videos even when protection is detected. This can be useful for testing or when you're willing to accept potentially lower quality downloads. To allow SABR/DRM downloads:
+**Advanced: PO Token Configuration**
+
+For videos where YouTube forces SABR on all clients, you can use a **PO Token** (Proof of Origin token) to access the `mweb` client:
+
+```bash
+YOUTUBE_PO_TOKEN=your_token_here  # Get from browser or plugin
+USE_MWEB_CLIENT=true
+```
+
+See the [PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide) for details on obtaining tokens.
+
+**Advanced: Allow Low-Quality Downloads**
+
+By default, videos with DRM/SABR protection are skipped. To attempt downloads anyway:
 
 ```bash
 SKIP_SABR_DRM_DOWNLOADS=false
 ```
 
-**Note**: The Docker image allows SABR/DRM downloads by default (`SKIP_SABR_DRM_DOWNLOADS=false`) to allow downloads to proceed. You can re-enable protection by setting `SKIP_SABR_DRM_DOWNLOADS=true` in your environment or rebuilding the image with the default changed.
+**For Detailed Troubleshooting:** See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
 
 ### SponsorBlock Audio Sync Fix
 
@@ -171,11 +197,15 @@ docker run --rm \
 | `TWL_API_KEY`               | **Required.** Your ToWatchList.com API key.                                    | (none)                                                   |
 | `TWL_LOOKBACK_DAYS`         | Number of days to look back for new videos.                                    | `28`                                                     |
 | `YOUTUBE_COOKIES_FILE`      | Optional. Path inside the container to a YouTube cookies file.                 | (none)                                                   |
+| `YOUTUBE_PO_TOKEN`          | Optional. PO Token for mweb client to bypass SABR/GVS restrictions. Requires cookies. | (none)                                                   |
+| `USE_MWEB_CLIENT`           | Set to `true` to force the mweb client (requires `YOUTUBE_PO_TOKEN`).          | `false`                                                  |
 | `TWL_WRITE_NFO_FILES`       | Set to `true` to generate `.nfo` metadata files for Kodi.                      | `true`                                                   |
 | `OVERWRITE_NFO_FILES`       | Set to `true` to overwrite existing `.nfo` files (useful for fixing malformed files). | `false`                                            |
 | `SKIP_TALLSCREEN_VIDEOS`    | Set to `true` to skip downloading videos where height > width (portrait).      | `false`                                                  |
 | `SPONSORBLOCK_CATEGORIES`   | Comma-separated list of SponsorBlock categories to mark as chapters.           | `sponsor,intro,outro,selfpromo,preview,music_offtopic`   |
 | `SKIP_SABR_DRM_DOWNLOADS`   | Set to `false` to bypass DRM/SABR protection and attempt downloads anyway.     | `false` (Docker), `true` (local)                        |
+| `JS_RUNTIMES`               | JavaScript runtime for EJS (deno, bun, node, quickjs).                         | `deno`                                                   |
+| `REMOTE_COMPONENTS`         | How to download EJS scripts (ejs:github, ejs:npm).                             | `ejs:github`                                             |
 | `TWL_KODI_HOSTNAME`         | The hostname or IP address of your Kodi instance.                              | (none)                                                   |
 | `TWL_KODI_PORT`             | The port for Kodi's web interface.                                             | `8080`                                                   |
 | `TWL_KODI_USER`             | The username for Kodi's web interface.                                         | (none)                                                   |
@@ -212,3 +242,25 @@ To check the code for style issues and automatically format it, run:
 make lint
 make format
 ```
+
+## Documentation
+
+- **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Comprehensive troubleshooting guide for common issues
+- **[yt-dlp EJS Wiki](https://github.com/yt-dlp/yt-dlp/wiki/EJS)** - External JavaScript support details
+- **[yt-dlp PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)** - Proof of Origin token documentation
+- **[SABR Issue #12482](https://github.com/yt-dlp/yt-dlp/issues/12482)** - YouTube SABR/nsig protection discussion
+
+## Logging & Debugging
+
+The downloader provides clean, minimal logging by default. To see detailed debug information:
+
+```bash
+LOG_LEVEL=DEBUG make run
+```
+
+Debug mode will show:
+- EJS script loading and execution
+- HTTP client selection details
+- PO token generation attempts
+- Full yt-dlp warning messages
+- Metadata extraction details
