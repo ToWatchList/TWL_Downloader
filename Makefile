@@ -16,6 +16,11 @@ build:
 	@echo "Building Docker image..."
 	@docker build -t $(IMAGE_NAME) .
 
+# Build the Docker image
+build-no-cache:
+	@echo "Building Docker image without cache..."
+	@docker build --no-cache -t $(IMAGE_NAME) .
+
 # Run the application in a Docker container
 # Expects a .env file with TWL_API_KEY
 run:
@@ -76,6 +81,7 @@ format:
 help:
 	@echo "Available commands:"
 	@echo "  build            - Build the Docker image"
+	@echo "  build-no-cache   - Build the Docker image without using cache"
 	@echo "  run              - Run the application in a Docker container"
 	@echo "  test             - Run unit tests inside a Docker container (recommended)"
 	@echo "  test-integration - Run slow integration tests inside a Docker container"
