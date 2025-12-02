@@ -121,7 +121,7 @@ def get_config():
         "remove_sponsor_segments": os.getenv("REMOVE_SPONSOR_SEGMENTS", "false").lower() in ("true", "1", "t"),
         # EJS (External JavaScript) configuration for solving YouTube challenges
         "js_runtimes": os.getenv("JS_RUNTIMES", "deno").split(","),  # Supported: deno, bun, node, quickjs
-        "remote_components": os.getenv("REMOTE_COMPONENTS", "ejs:github"),  # Supported: ejs:npm, ejs:github
+        "remote_components": os.getenv("REMOTE_COMPONENTS", "ejs:github").split(","),  # Supported: ejs:npm, ejs:github
         # PO Token configuration for bypassing YouTube GVS (Google Video Server) restrictions
         "po_token": os.getenv("YOUTUBE_PO_TOKEN"),  # Pass PO token for mweb client (GVS requests)
         "use_mweb_client": os.getenv("USE_MWEB_CLIENT", "false").lower() in ("true", "1", "t"),  # Force mweb client for PO token support
@@ -193,7 +193,7 @@ def get_video_metadata(url, config):
         "quiet": False,
         "skip_download": True,
         "logger": WarningLogger(),
-        "js_runtimes": ",".join(config["js_runtimes"]),
+        "js_runtimes": {runtime: {} for runtime in config["js_runtimes"]},
         "remote_components": config["remote_components"],
     }
 
@@ -399,7 +399,7 @@ def download_video(url, info_dict, config):
         "no_warnings": True,  # Suppress yt-dlp warnings during download (we already handled them in metadata phase)
         "postprocessors": postprocessors,
         "embed_chapters": True,  # Ensure chapters are written to the file
-        "js_runtimes": ",".join(config["js_runtimes"]),
+        "js_runtimes": {runtime: {} for runtime in config["js_runtimes"]},
         "remote_components": config["remote_components"],
     }
 
