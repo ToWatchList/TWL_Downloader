@@ -38,3 +38,5 @@ nosetests.xml
 
 # Environment copy from example
 .env
+# cookies
+*cookies.txt
