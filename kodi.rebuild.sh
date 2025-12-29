@@ -35,3 +35,8 @@ send_jsonrpc "Addons.ExecuteAddon" "{\"addonid\":\"plugin.video.jellyfin\",\"par
 
 echo
 echo "The Music Video library is being rebuilt. Monitor Kodi for progress."
+
+sleep 10
+
+# Return to home screen
+send_jsonrpc "Input.Home" "{}"
