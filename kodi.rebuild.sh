@@ -2,6 +2,11 @@
 # this is a script to repair/rebuild the Music Video database in Kodi as provided by Jellyfin
 # The web interface for Kodi is at http://10.0.3.252/ with username "osmc" and password "osmc"
 
+VERBOSE=0
+if [ "$1" = "-v" ]; then
+  VERBOSE=1
+fi
+
 KODI_HOST="10.0.3.252"
 KODI_USER="osmc"
 KODI_PASS="osmc"
@@ -9,6 +14,10 @@ KODI_PASS="osmc"
 # Music Video library ID from Jellyfin. To update:
 # scp osmc@10.0.3.252:/home/osmc/.kodi/userdata/Database/jellyfin.db /tmp/ && sqlite3 /tmp/jellyfin.db "SELECT view_id FROM view WHERE media_type='musicvideos';"
 LIBRARY_ID="e2c00f297a5f80af390f52f72e782147"
+
+log() {
+  [ "$VERBOSE" -eq 1 ] && echo "$1"
+}
 
 # Function to send a jsonrpc message to Kodi
 send_jsonrpc() {
@@ -21,22 +30,35 @@ send_jsonrpc() {
     http://$KODI_USER:$KODI_PASS@$KODI_HOST/jsonrpc
 }
 
-# First send an alert to the user that we are starting the rebuild
-# send_jsonrpc "GUI.ShowNotification" '{"title":"Library Update","message":"Starting Music Video library repair...","displaytime":5000}'
+# Check the number of music videos in the library
+log "Checking Music Video library count..."
+RESPONSE=$(send_jsonrpc "VideoLibrary.GetMusicVideos" "{\"properties\":[]}")
 
-echo "Starting Music Video library repair..."
-echo "Library ID: $LIBRARY_ID"
+MUSIC_VIDEO_COUNT=$(echo "$RESPONSE" | grep -o '"total":[0-9]*' | cut -d':' -f2 | head -1)
 
-# Trigger the RepairLibrary action via the Jellyfin addon plugin URL
-PLUGIN_URL="plugin://plugin.video.jellyfin/?mode=repairlib&id=$LIBRARY_ID"
+if [ -z "$MUSIC_VIDEO_COUNT" ]; then
+  echo "ERROR: Could not parse music video count"
+  [ "$VERBOSE" -eq 1 ] && echo "Response: $RESPONSE"
+  exit 1
+fi
 
-echo "Sending repair command to Jellyfin addon..."
-send_jsonrpc "Addons.ExecuteAddon" "{\"addonid\":\"plugin.video.jellyfin\",\"params\":{\"mode\":\"repairlib\",\"id\":\"$LIBRARY_ID\"}}"
+log "Music Video library contains: $MUSIC_VIDEO_COUNT items"
 
-echo
-echo "The Music Video library is being rebuilt. Monitor Kodi for progress."
+# Only run repair if library has less than 10 items
+if [ "$MUSIC_VIDEO_COUNT" -ge 10 ]; then
+  echo "Kodi rebuild skipped: $MUSIC_VIDEO_COUNT items (>= 10)"
+  exit 0
+fi
+
+echo "REPAIRED Music Video library ($MUSIC_VIDEO_COUNT items)"
+log "Starting repair for library ID: $LIBRARY_ID"
+
+# Trigger the RepairLibrary action
+log "Sending repair command to Jellyfin addon..."
+send_jsonrpc "Addons.ExecuteAddon" "{\"addonid\":\"plugin.video.jellyfin\",\"params\":{\"mode\":\"repairlib\",\"id\":\"$LIBRARY_ID\"}}" > /dev/null
 
 sleep 10
 
 # Return to home screen
-send_jsonrpc "Input.Home" "{}"
+log "Returning to home screen"
+send_jsonrpc "Input.Home" "{}" > /dev/null
