@@ -22,24 +22,16 @@ send_jsonrpc() {
 }
 
 # First send an alert to the user that we are starting the rebuild
-send_jsonrpc "GUI.ShowNotification" '{"title":"Library Update","message":"Starting Music Video library repair...","displaytime":5000}'
+# send_jsonrpc "GUI.ShowNotification" '{"title":"Library Update","message":"Starting Music Video library repair...","displaytime":5000}'
 
 echo "Starting Music Video library repair..."
 echo "Library ID: $LIBRARY_ID"
 
-# Send the RepairLibrary notification to the Jellyfin addon
-# The Jellyfin addon listens for NotifyAll messages with method "RepairLibrary"
-DATA=$(echo "{\"Id\": \"$LIBRARY_ID\"}" | sed 's/"/\\"/g')
-NOTIFY_CMD="NotifyAll(plugin.video.jellyfin, RepairLibrary, \"[$DATA]\")"
+# Trigger the RepairLibrary action via the Jellyfin addon plugin URL
+PLUGIN_URL="plugin://plugin.video.jellyfin/?mode=repairlib&id=$LIBRARY_ID"
 
 echo "Sending repair command to Jellyfin addon..."
-send_jsonrpc "XBMC.ExecuteBuiltin" "{\"command\":\"$NOTIFY_CMD\"}"
+send_jsonrpc "Addons.ExecuteAddon" "{\"addonid\":\"plugin.video.jellyfin\",\"params\":{\"mode\":\"repairlib\",\"id\":\"$LIBRARY_ID\"}}"
 
-# Give it a moment to start
-sleep 2
-
-# Send a notification that the repair has been initiated
-send_jsonrpc "GUI.ShowNotification" '{"title":"Library Update","message":"Music Video library repair initiated. This may take several minutes.","displaytime":10000}'
-
-echo "Repair command sent successfully!"
+echo
 echo "The Music Video library is being rebuilt. Monitor Kodi for progress."
