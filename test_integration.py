@@ -25,6 +25,8 @@ def test_download_4k60fps_video(tmp_path):
         "youtube_cookies_file": None,
         "sponsorblock_categories": [],
         "skip_sabr_drm_downloads": False,  # Allow SABR/DRM downloads for testing
+        "js_runtimes": ["deno"],
+        "remote_components": ["ejs:github"],
     }
 
     # First, get the metadata, as the main script does
@@ -97,6 +99,8 @@ def test_youtube_description_chapters(tmp_path):
         "sponsorblock_categories": [],  # No SponsorBlock for this test
         "skip_sabr_drm_downloads": False,
         "remove_sponsor_segments": False,
+        "js_runtimes": ["deno"],
+        "remote_components": ["ejs:github"],
     }
 
     # Get metadata and download
@@ -163,6 +167,8 @@ def test_sponsorblock_chapter_marking(tmp_path):
         "sponsorblock_categories": ["sponsor", "intro", "outro"],
         "skip_sabr_drm_downloads": False,
         "remove_sponsor_segments": False,  # Default: mark as chapters only
+        "js_runtimes": ["deno"],
+        "remote_components": ["ejs:github"],
     }
 
     # Get metadata and download with chapter marking
@@ -233,6 +239,8 @@ def test_combined_youtube_and_sponsorblock_chapters(tmp_path):
         "sponsorblock_categories": ["sponsor", "intro", "outro", "selfpromo"],
         "skip_sabr_drm_downloads": False,
         "remove_sponsor_segments": False,  # Preserve audio sync
+        "js_runtimes": ["deno"],
+        "remote_components": ["ejs:github"],
     }
 
     # Get metadata and download
@@ -307,6 +315,8 @@ def test_sponsorblock_segment_removal(tmp_path):
         "sponsorblock_categories": ["sponsor"],
         "skip_sabr_drm_downloads": False,
         "remove_sponsor_segments": True,  # Enable segment removal
+        "js_runtimes": ["deno"],
+        "remote_components": ["ejs:github"],
     }
 
     # Get metadata and download with segment removal
@@ -367,6 +377,8 @@ def test_no_sponsorblock_categories(tmp_path):
         "sponsorblock_categories": [],  # No SponsorBlock processing
         "skip_sabr_drm_downloads": False,
         "remove_sponsor_segments": False,
+        "js_runtimes": ["deno"],
+        "remote_components": ["ejs:github"],
     }
 
     # Get metadata and download
@@ -431,6 +443,8 @@ def test_chapter_edge_cases(tmp_path):
         "sponsorblock_categories": ["sponsor", "intro", "outro", "selfpromo", "preview", "music_offtopic"],
         "skip_sabr_drm_downloads": False,
         "remove_sponsor_segments": False,
+        "js_runtimes": ["deno"],
+        "remote_components": ["ejs:github"],
     }
 
     # Get metadata and download

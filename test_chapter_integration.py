@@ -65,6 +65,8 @@ def test_chapter_configuration():
                 "download_location": temp_dir,
                 "youtube_cookies_file": None,
                 "skip_sabr_drm_downloads": False,
+                "js_runtimes": ["deno"],
+                "remote_components": ["ejs:github"],
                 **test_case["config"]
             }
 
