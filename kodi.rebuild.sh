@@ -21,13 +21,13 @@ log() {
 
 # Function to send a jsonrpc message to Kodi
 send_jsonrpc() {
-  local method=$1
-  local params=$2
+  method="$1"
+  params="$2"
 
   curl -s -X POST \
     -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}" \
-    http://$KODI_USER:$KODI_PASS@$KODI_HOST/jsonrpc
+    "http://$KODI_USER:$KODI_PASS@$KODI_HOST/jsonrpc"
 }
 
 # Check the number of music videos in the library
