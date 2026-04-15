@@ -1,13 +1,13 @@
 #!/bin/sh
 # this is a script to repair/rebuild the Music Video database in Kodi as provided by Jellyfin
-# The web interface for Kodi is at http://10.0.3.252/ with username "osmc" and password "osmc"
+# The web interface for Kodi is at http://osmc-az.local/ with username "osmc" and password "osmc"
 
 VERBOSE=0
 if [ "$1" = "-v" ]; then
   VERBOSE=1
 fi
 
-KODI_HOST="10.0.3.252"
+KODI_HOST="osmc-az.local"
 KODI_USER="osmc"
 KODI_PASS="osmc"
 
