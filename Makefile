@@ -6,7 +6,7 @@ TEST_IMAGE_NAME := twl-downloader-tester
 ENV_FILE := .env
 
 # Phony targets
-.PHONY: all build run test test-local test-integration test-all lint format help
+.PHONY: all build run test test-local test-integration test-all lint format deploy-kodi help
 
 # Default target
 all: help
@@ -65,6 +65,15 @@ test-local:
 	@echo "Running only unit tests due to sandbox limitations..."
 	@PYTHONPATH=. pytest -m "not slow"
 
+# Deploy kodi.rebuild.sh to the kodi host
+deploy-kodi:
+	@echo "Deploying kodi.rebuild.sh to osmc-az.local..."
+	@scp kodi.rebuild.sh osmc@osmc-az.local:/home/osmc/kodi.rebuild.sh
+	@ssh osmc@osmc-az.local chmod +x /home/osmc/kodi.rebuild.sh
+	@echo "Deployed. To set up cron on the kodi host, run:"
+	@echo "  ssh osmc@osmc-az.local 'crontab -e'"
+	@echo "  Add: 10 * * * * /home/osmc/kodi.rebuild.sh"
+
 # Lint the code using ruff
 lint:
 	@echo "Linting code..."
@@ -89,3 +98,4 @@ help:
 	@echo "  test-local       - Run all tests on the local machine"
 	@echo "  lint             - Check code for style issues and errors"
 	@echo "  format           - Automatically format the code"
+	@echo "  deploy-kodi      - Deploy kodi.rebuild.sh to the kodi host (osmc-az.local)"
