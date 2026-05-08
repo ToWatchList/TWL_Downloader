@@ -1,0 +1,16 @@
+[tool.ruff]
+# Enable Pyflakes, pycodestyle, and isort rule sets.
+lint.select = ["E", "F", "I"]
+
+# Set the line length to 88, same as black.
+line-length = 88
+
+[tool.ruff.format]
+# Use black-compatible formatting.
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+markers = ["slow: marks tests as slow to run"]
