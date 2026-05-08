@@ -1,0 +1,4 @@
+requests
+kodi-json
+yt-dlp[default,curl-cffi]
+pyopenssl
