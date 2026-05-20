@@ -1,8 +1,12 @@
 #!/bin/bash
 
 IMAGE_NAME="twl-downloader"
-# SLACK_WEBHOOK_URL must be set in the environment or in .env (not hardcoded here)
-SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
+ENV_FILE="/home/nick/TWL_Downloader/.env"
+
+# Source .env so SLACK_WEBHOOK_URL is available for the pre-flight check below.
+# The same file is passed to the container via --env-file.
+# shellcheck disable=SC1090
+[ -f "$ENV_FILE" ] && set -a && . "$ENV_FILE" && set +a
 
 if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     echo "ERROR: Docker image '$IMAGE_NAME' not found. Run 'make build' in /home/nick/TWL_Downloader/" >&2
