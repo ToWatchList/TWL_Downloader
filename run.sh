@@ -36,7 +36,8 @@ $(tail -n 8 "$BUILD_LOG")"
     echo "Rebuild complete." >&2
 fi
 
-exec /usr/bin/docker run --rm \
+# timeout turns a hung run into a failed run (fail ping) instead of silence.
+exec timeout --foreground -k 30 2h /usr/bin/docker run --rm \
     --env-file "$ENV_FILE" \
     -v "/exos/video/Other/ToWatchList/":/downloads \
     -v "/exos/docker-data/config/appdata/twl_downloader/":/config \

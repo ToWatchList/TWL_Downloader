@@ -156,7 +156,7 @@ def get_videos_from_api(api_key, lookback_days):
         f"https://towatchlist.com/api/v1/marks?since=-{lookback_days}days&uid={api_key}"
     )
     try:
-        response = requests.get(api_url)
+        response = requests.get(api_url, timeout=(10, 30))
         response.raise_for_status()
         return response.json().get("marks", [])
     except requests.exceptions.RequestException as e:
@@ -192,6 +192,7 @@ def get_video_metadata(url, config):
     ydl_opts = {
         "quiet": False,
         "skip_download": True,
+        "socket_timeout": 30,
         "logger": WarningLogger(),
         "js_runtimes": {runtime: {} for runtime in config["js_runtimes"]},
         "remote_components": config["remote_components"],
@@ -388,6 +389,7 @@ def download_video(url, info_dict, config):
 
     ydl_opts = {
         "format": ydl_format,
+        "socket_timeout": 30,
         "merge_output_format": "mp4",  # Changed from mkv to mp4 for better SponsorBlock chapter support
         "outtmpl": output_template,
         "writethumbnail": True,
@@ -435,8 +437,23 @@ def download_video(url, info_dict, config):
     except Exception as e:
         error_str = str(e).lower()
 
+        # Subtitle fetch rate-limited (429): retry without subtitles rather than losing the video
+        if "subtitles" in error_str and "429" in error_str:
+            logging.warning(f"Subtitle download rate-limited, retrying without subtitles: {e}")
+            ydl_opts_nosub = ydl_opts.copy()
+            for key in ("writesubtitles", "writeautomaticsub", "embedsubtitles"):
+                ydl_opts_nosub[key] = False
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts_nosub) as ydl:
+                    ydl.download([url])
+                    logging.info("Successfully downloaded without subtitles")
+                    return
+            except Exception as e_nosub:
+                logging.error(f"Download also failed without subtitles. Reason: {e_nosub}")
+                # Fall through to regular error handling
+
         # Retry with tv client if nsig extraction failed
-        if "nsig extraction failed" in error_str or "n function" in error_str:
+        elif "nsig extraction failed" in error_str or "n function" in error_str:
             logging.warning(f"Download failed with nsig error, retrying with tv client: {e}")
             ydl_opts_tv = ydl_opts.copy()
             ydl_opts_tv["extractor_args"] = {"youtube": ["player_client=tv"]}
